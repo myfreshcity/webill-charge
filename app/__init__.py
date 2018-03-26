@@ -22,6 +22,12 @@ pool = redis.ConnectionPool(host='127.0.0.1', port=6379, db=0)
 red = redis.StrictRedis(connection_pool=pool)
 scheduler = APScheduler()
 
+def daily_quest():
+    from .main.table_data_server import ontime_refunds,ontime_commits
+    print("daily_quest_start %s"%(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+    ontime_refunds()
+    ontime_commits()
+    print('quest has done')
 
 
 def create_app(config_name):

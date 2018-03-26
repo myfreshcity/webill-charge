@@ -36,7 +36,6 @@ def test():
 
 
 @main.route('/charge/plan/download',methods=['POST','GET'])
-@TokenTest
 def download_plan():
     dictory = config['dev'].DOWNLOAD_FOLD
     filename = "refund_plan.xls"
@@ -44,7 +43,6 @@ def download_plan():
 
 #下载流水文件
 @main.route('/charge/refund/download',methods=['POST','GET'])
-@TokenTest
 def download_refund():
     dictory = config['dev'].DOWNLOAD_FOLD
     filename = "refund.xls"
@@ -86,7 +84,7 @@ def refund_upload():
 def get_contract():
     all,page,customer,contract_no,check_date = request.form.get('all'),request.form.get('page'),request.form.get('customer'),request.form.get('contract_no'),request.form.get('upload_time')
     execute = DataExecute()
-    result=execute.unse_get_contract(contract_no,customer,check_date,page)
+    result=execute.unse_get_contract(contract_no,customer,check_date,page,all)
     return result
 
 
@@ -97,8 +95,9 @@ def get_contract_detail():
     data = request.get_data()
     j_data = json.loads(data.decode())
     contract_no = j_data['contract_no']
+    is_overtime  = j_data['is_overtime']
     execute = DataExecute()
-    result = execute.contract_detail(contract_no)
+    result = execute.contract_detail(contract_no,is_overtime=is_overtime)
     return result
 
 
@@ -135,7 +134,7 @@ def link_refund():
 @main.route('/charge/commit/approve',methods=['POST'])
 @TokenTest
 def approve_commit():
-    user_id,comment_id,result = request.form.get('user_id'),request.form.get('comment_id'),request.form.get('result')
+    user_id,comment_id,result = request.form.get('user_id'),request.form.get('commit_id'),request.form.get('result')
     execute = DataExecute()
     result=execute.approve_commit(comment_id,result,user_id)
     return result

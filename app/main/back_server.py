@@ -28,7 +28,8 @@ def TokenTest(func):
             else:
                 result = func(*args,**kwargs)
                 if isinstance(result,dict):
-                    result['token']=message['token']
+                    obj = {'jwdToken':message['token']}
+                    result['obj']=obj
             return jsonify(result)
         else:
             result = func(*args, **kwargs)

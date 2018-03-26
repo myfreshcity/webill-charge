@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
 
-import MySQLdb
+import MySQLdb,datetime
 import MySQLdb.cursors
 
 def get_conn():
@@ -54,3 +54,44 @@ def Insert(func):
     return out
 
 
+@SearchAll
+def ontime_refund():
+    now = datetime.datetime.now()
+    start_time = now.replace(hour=0,minute=1,second=0)
+    end_time = start_time+datetime.timedelta(days=1)
+    sql = "SELECT * from t_refund_plan WHERE is_settled=0 and deadline BETWEEN %s and %s"
+    param = (start_time,end_time)
+    return sql,param
+
+@SearchAll
+def find_contractsby_id(contracts_id_list):
+    sql='SELECT * from t_contract where id in %s'
+    param = (contracts_id_list,)
+    return sql,param
+
+@Insert
+def update_contract(is_dealt,is_settled,contract_id):
+    sql = '''UPDATE t_contract set is_dealt = %s,is_settled = %s WHERE id=%s'''
+    param = (is_dealt,is_settled,contract_id)
+    return sql,param
+
+
+@SearchAll
+def ontime_commit():
+    now = datetime.datetime.now()
+    end_time = now.replace(hour=0,minute=0,second=0)+datetime.timedelta(days=1)
+    sql="select * from t_commit_refund where is_valid=1 and is_settled=0 and deadline<=%s"
+    param  = (end_time,)
+    return sql,param
+
+@Insert
+def update_plan_by_commit(commit_id):
+    sql='UPDATE t_refund_plan SET settled_by_commit = NULL where settled_by_commit = %s'
+    param = (commit_id,)
+    return sql,param
+
+@Insert
+def update_commit(is_valid,is_settled,result,commit_id):
+    sql = 'UPDATE t_commit_refund SET is_valid = %s,is_settled=%s,result = %s WHERE id = %s'
+    param = (is_valid,is_settled,result,commit_id)
+    return sql,param
