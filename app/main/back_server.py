@@ -37,3 +37,19 @@ def TokenTest(func):
                 return jsonify(result)
             return result
     return outer
+
+
+#时分和时分秒正则匹配
+def TimeString(time_string):
+    time1 = re.findall('(\d+):(\d+):(\d+)', time_string)
+    time2 = re.findall('(\d+):(\d+)', time_string)
+    if time1:
+        return list(time1[0])
+    elif time2:
+        time = list(time2[0])
+        time.append(0)
+        return time
+    else:
+        return None
+
+

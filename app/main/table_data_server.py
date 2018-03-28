@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
 import pandas as pd
-import xlrd,math
+import xlrd
 import os,datetime,re
 from ..models import Contract,UploadFile,tRefundPlan,Refund,CommitRefund
 from sqlalchemy import and_
@@ -16,17 +16,23 @@ class FileExecute:
         self.file_dir = config['dev'].UPLOAD_FOLD
 
     def execute_file(self):
-        result = self.rectify(self.file_kind)
-        if result['result'] != True:
-            return {'issucceed':500,'message': result['message']}
+        try:
+            result = self.rectify(self.file_kind)
+            if result['result'] != True:
+                return {'issucceed':500,'message': result['message']}
 
-        file_id = self.save_file()
-        datatable = result['datatable']
-        contract_list = self.save_file_in_db(self.file_kind,datatable,file_id)
-        if contract_list:
-            for contract in contract_list:
-                self.update_contract(contract)
-        return {'isSucceed':200,'message':'上传成功'}
+            file_id = self.save_file()
+            datatable = result['datatable']
+            contract_list = self.save_file_in_db(self.file_kind,datatable,file_id)
+            if contract_list:
+                for contract in contract_list:
+                    self.update_contract(contract)
+                return {'isSucceed':200,'message':'上传成功'}
+            else:
+                return {'isSucceed': 500, 'message': '数据有误'}
+        except:
+            return {'isSucceed': 500, 'message': '模板有误'}
+
 
     #验证模板是否正确
     def rectify(self,kind):
@@ -49,7 +55,7 @@ class FileExecute:
                 result = True
                 return {'result': result, 'datatable': datatable}
             else:
-                return {"result": result, 'message': '模板格式不正确'}
+                return {"result": result, 'message': '列缺失'}
         except:
             return {"result": result, 'message': '模板格式不正确'}
 
@@ -95,87 +101,117 @@ class FileExecute:
 
     #将文件信息保存到数据库中
     def save_file_in_db(self,kind,datatable,file_id):
-        contract_list = []
         if kind == "plan":
             contract_list =self.save_refund_plan(datatable,file_id)
         elif kind == "refund":
             contract_list =self.save_refund(datatable,file_id)
+        else:
+            contract_list = False
         return contract_list
 
     #保存还款计划函数
     def save_refund_plan(self,datatable,file_id=None):
+        from .sqlhelper import delete_contract_by_no
         contract_nos = list(datatable['合同编号'])
-        for contract_no in contract_nos:
-            contract_db = Contract.query.filter(Contract.contract_no==contract_no).first()#检查合同号是否存在
-            if contract_db:continue#如果存在，该合同不予录入
-            limit_table = datatable[datatable['合同编号']==contract_no]
-            contract = Contract()
-            contract.file_id = file_id
-            contract.contract_no = str(contract_no)
-            contract.customer = str(limit_table['客户姓名'].values[0])
-            contract.id_number = str(limit_table['身份证号'].values[0])
-            contract.shop = str(limit_table['地区门店'].values[0])
-            contract.contract_amount = int(limit_table['合同金额'].values[0]*100)
-            contract.loan_amount = int(limit_table['放款金额'].values[0]*100)
-            contract.tensor = int(limit_table['借款期数'].values[0])
-            loan_date = limit_table['放款日期'].values[0]
-            if loan_date==loan_date:contract.loan_date = pd.Timestamp(loan_date).to_pydatetime()
-            db.session.add(contract)
-            db.session.commit()
+        try:
+            for contract_no in contract_nos:
+                contract_db = Contract.query.filter(Contract.contract_no==contract_no).first()#检查合同号是否存在
+                if contract_db:continue#如果存在，该合同不予录入
+                limit_table = datatable[datatable['合同编号']==contract_no]
+                contract = Contract()
+                contract.file_id = file_id
+                contract.contract_no = str(contract_no)
+                contract.customer = str(limit_table['客户姓名'].values[0])
+                contract.id_number = str(limit_table['身份证号'].values[0])
+                contract.shop = str(limit_table['地区门店'].values[0])
+                contract.contract_amount = int(limit_table['合同金额'].values[0]*100)
+                contract.loan_amount = int(limit_table['放款金额'].values[0]*100)
+                contract.tensor = int(limit_table['借款期数'].values[0])
+                loan_date = limit_table['放款日期'].values[0]
+                if loan_date==loan_date:contract.loan_date = pd.Timestamp(loan_date).to_pydatetime()
+                db.session.add(contract)
+                db.session.commit()
 
-            contract = Contract.query.filter(Contract.contract_no==contract_no).first()
-            tensor_max = (len(datatable.columns)-8)//2
-            for i in range(tensor_max):
-                deadline=limit_table['%d期应还日期' % (i + 1)].values[0]
-                if pd.notnull(deadline):#判断值是否为Nan
-                    refund_plan = tRefundPlan()
-                    refund_plan.contract_id = contract.id
-                    refund_plan.file_id = file_id
-                    refund_plan.deadline = pd.Timestamp(deadline).to_pydatetime()+datetime.timedelta(days=1)
-                    refund_plan.tensor = i+1
-                    refund_plan.principal = int(limit_table['%d期应还金额'%(i+1)].values[0]*100)
-                    refund_plan.interest = 0
-                    db.session.add(refund_plan)
-                else:break
-            db.session.commit()
-        return set(contract_nos)
+                contract = Contract.query.filter(Contract.contract_no==contract_no).first()
+                tensor_max = (len(datatable.columns)-8)//2
+                refund_ok_flag = True
+                for i in range(tensor_max):
+                    deadline=limit_table['%d期应还日期' % (i + 1)].values[0]
+                    amount = limit_table['%d期应还金额'%(i+1)].values[0]
+                    if (pd.isnull(deadline) and pd.notnull(amount)) or (pd.isnull(amount) and pd.notnull(deadline)):
+                        refund_ok_flag = False
+                        break
+                    elif pd.notnull(deadline) and pd.notnull(amount):#判断值是否为Nan
+                        refund_plan = tRefundPlan()
+                        refund_plan.contract_id = contract.id
+                        refund_plan.file_id = file_id
+                        refund_plan.deadline = pd.Timestamp(deadline).to_pydatetime()+datetime.timedelta(days=1)
+                        refund_plan.tensor = i+1
+                        refund_plan.principal = int(amount*100)
+                        refund_plan.interest = 0
+                        db.session.add(refund_plan)
+                    else:break
+
+                if refund_ok_flag:
+                    db.session.commit()
+                else:
+                    delete_contract_by_no(contract_nos)
+                    return False
+
+            return set(contract_nos)
+        except:
+            delete_contract_by_no(contract_nos)
+            return False
+
 
     def save_refund(self,datatable,file_id=None):
-        contract_list = []
-        for index in datatable.index:
-            note = datatable.loc[index].values
-            date = pd.Timestamp(note[0]).to_pydatetime()
-            time = re.findall('(\d+):(\d+):(\d+)',note[1])[0]
-            new_date = date.replace(hour=int(time[0]), minute=int(time[1]), second=int(time[2]))
-            customer,amount,shop,refund_type,card_id,bank = note[2],note[3],note[4],note[5],note[6],note[7]
-            contracts = Contract.query.filter(Contract.customer==customer,Contract.is_settled ==0).all()
+        from .back_server import TimeString
+        try:
+            contract_list = []
+            for index in datatable.index:
+                note = datatable.loc[index].values
+                date = pd.Timestamp(note[0]).to_pydatetime()
+                time = TimeString(note[1])#支持匹配正则匹配时分和时分秒
+                if not time : time = (12,0,0)
+                new_date = date.replace(hour=int(time[0]), minute=int(time[1]), second=int(time[2]))
+                customer,amount,shop,refund_type,card_id,bank = note[2],note[3],note[4],note[5],note[6],note[7]
+                contracts = Contract.query.filter(Contract.customer==customer,Contract.is_settled ==0).all()
 
-            refund = Refund()
-            refund.file_id = file_id
-            refund.refund_time = new_date
-            refund.refund_name = customer
-            refund.method = refund_type
-            refund.amount = int(amount*100)
+                refund = Refund()
+                refund.file_id = file_id
+                refund.refund_time = new_date
+                refund.refund_name = customer
+                refund.method = refund_type
+                refund.amount = int(amount*100)
 
-            if len(contracts)==1:
-                contract = contracts[0]
-                if contract.shop == shop:
-                    contract_list.append(contract.contract_no)
-                    refund.contract_id = contract.id
-                    contract.refund_sum+= refund.amount
-                    contract.remain_sum+=refund.amount
-                    db.session.add(contract)
+                if len(contracts)==1:
+                    contract = contracts[0]
+                    if contract.shop == shop:
+                        contract_list.append(contract.contract_no)
+                        start_time = (new_date + datetime.timedelta(days=1)).replace(hour=0, minute=0, second=0)
+                        refund_plans = tRefundPlan.query.filter(tRefundPlan.contract_id == contract.id,tRefundPlan.is_settled==0,tRefundPlan.settled_by_commit.is_(None),tRefundPlan.deadline<=start_time).all()
+                        if len(refund_plans)==1:#如果仅仅有一期逾期且逾期应还时间为还款当天，则冲平
+                            refund_plan = refund_plans[0]
+                            plan_amount = refund_plan.principal + refund_plan.interest
+                            if refund_plan.deadline == start_time and refund.amount>=plan_amount:
+                                refund.amount-=plan_amount
+                        refund.contract_id = contract.id
+                        contract.refund_sum+= refund.amount
+                        contract.remain_sum+=refund.amount
+                        db.session.add(contract)
 
-            if bank!=bank:
-                refund.bank = None
-                refund.card_id = None
-            else:
-                refund.bank = bank
-                refund.card_id = int(card_id)
+                if bank!=bank:
+                    refund.bank = None
+                    refund.card_id = None
+                else:
+                    refund.bank = bank
+                    refund.card_id = int(card_id)
 
-            db.session.add(refund)
-        db.session.commit()
-        return set(contract_list)
+                db.session.add(refund)
+            db.session.commit()
+            return set(contract_list)
+        except:
+            return False
 
     def update_contract(self,contract_no):
         contract = Contract.query.filter(Contract.contract_no==contract_no).first()
@@ -330,10 +366,11 @@ class DataExecute:
             for overtime_plan in overtime_plans:
                 overtime_amount = overtime_plan.principal+overtime_plan.interest
                 overtime_sum +=overtime_amount
-                plan_dict = {'deadline':overtime_plan.deadline.strftime("%Y-%m-%d"),
+                plan_dict = {'deadline':(overtime_plan.deadline-datetime.timedelta(days=1)).strftime("%Y-%m-%d"),
                              'amount':"%.2f"%(overtime_amount/100),
                              'tensor':overtime_plan.tensor,
                              'settled_date':overtime_plan.settled_date.strftime("%Y-%m-%d") if overtime_plan.settled_date else None,
+                             'overtime_date':(now-overtime_plan.deadline).days+1
                              }
                 settled_status = {'逾期':[0,0],'正常还款中':[1,0],'已结清':[0,1],'提前结清':[1,1]}
                 refund_status = [0 if overtime_plan.deadline<datetime.datetime.now() else 1,1 if overtime_plan.is_settled ==1 else 0]
@@ -347,13 +384,14 @@ class DataExecute:
             contract_dic['check_status'] = 1
         contract_dic['dealt_status'] =contract.is_dealt
         contract_dic['overtime_list'] = overtime_list
+        contract_dic['overtime_num'] = len(overtime_list)
         contract_dic['overtime_sum'] = '%.2f'%(overtime_sum/100)
         commit = CommitRefund.query.filter(CommitRefund.contract_id==contract.id,CommitRefund.is_valid!=0).order_by(CommitRefund.create_time.desc()).first()
         if commit:
             commit_dic = {'type':commit.type,'deadline':commit.deadline.strftime('%Y-%m-%d'),'amount':"%.2F"%(commit.amount/100),'remark':commit.remark}
             contract_dic['commit']=commit_dic
         else:
-            contract_dic['commit']=None
+            contract_dic['commit']={'type':'','deadline':'','amount':'','remark':''}
         return  contract_dic
 
     def get_unlinked_refund(self,page=None,customer=None,refund_date=None,range=None):
@@ -487,12 +525,12 @@ class DataExecute:
                          }
             overtime_list.append(plan_dict)
         commit_dict = {'isSucceed':200,'contract_no':contract.contract_no,'customer':contract.customer,'loan_amount':"%.2f"%(contract.loan_amount/100),'tensor':contract.tensor,
-                       'ovetime_list':overtime_list,'overtime_sum':"%.2f"%(overtime_sum/100),'remain_sum':"%.2f"%(contract.remain_sum/100),'result':commit.result,'commit_id':commit_id,'commit_amount':'%.2f'%(commit.amount/100),'remark':commit.remark,'deadline':commit.deadline.strftime('%Y-%m-%d')}
+                       'ovetime_list':overtime_list,'overtime_num':len(overtime_list),'overtime_sum':"%.2f"%(overtime_sum/100),'remain_sum':"%.2f"%(contract.remain_sum/100),'result':commit.result,'commit_id':commit_id,'commit_amount':'%.2f'%(commit.amount/100),'remark':commit.remark,'deadline':commit.deadline.strftime('%Y-%m-%d')}
         return commit_dict
 
 
     #协商还款审批
-    def approve_commit(self,commit_id,result,user_id):
+    def approve_commit(self,commit_id,result,user_id,approve_remark=None):
         commit=CommitRefund.query.filter(CommitRefund.id==int(commit_id),CommitRefund.is_valid==2,CommitRefund.is_settled==0).first()
         if not commit:
             return {'isSucceed':500,'message':'未找到该协商计划'}
@@ -501,6 +539,7 @@ class DataExecute:
         else:commit.is_valid = 0
         commit.result = int(result)
         commit.approver= user_id
+        commit.approve_remark = approve_remark
         commit.approve_date = datetime.datetime.now()
         db.session.add(commit)
         db.session.commit()
@@ -593,6 +632,9 @@ class DataExecute:
             lists = []
         return lists
 
+    def test(self):
+        from .sqlhelper import  delete_contract_by_no
+        delete_contract_by_no(['200803281000','1111'])
 
 
 def ontime_refunds():

@@ -156,6 +156,7 @@ class CommitRefund(db.Model):
     deadline = db.Column(db.DateTime)
     approve_date = db.Column(db.DateTime)
     approver = db.Column(db.VARCHAR(20))
+    approve_remark = db.Column(db.VARCHAR)
     result = db.Column(db.Integer)
     is_settled = db.Column(db.Integer)
     is_valid = db.Column(db.Integer)

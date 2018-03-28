@@ -95,3 +95,11 @@ def update_commit(is_valid,is_settled,result,commit_id):
     sql = 'UPDATE t_commit_refund SET is_valid = %s,is_settled=%s,result = %s WHERE id = %s'
     param = (is_valid,is_settled,result,commit_id)
     return sql,param
+
+@Insert
+def delete_contract_by_no(contract_nos):
+    sql='DELETE From t_contract WHERE contract_no in %s'
+    param = (contract_nos,)
+    return sql,param
+
+

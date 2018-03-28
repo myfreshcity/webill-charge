@@ -29,11 +29,6 @@ from .back_server import TokenTest
 #下载计划文件
 
 
-@main.route('/charge/test',methods=['POST','GET'])
-@TokenTest
-def test():
-    return {'isSucceed':200}
-
 
 @main.route('/charge/plan/download',methods=['POST','GET'])
 def download_plan():
@@ -82,7 +77,7 @@ def refund_upload():
 @main.route('/charge/contract/get',methods=['POST'])
 @TokenTest
 def get_contract():
-    all,page,customer,contract_no,check_date = request.form.get('all'),request.form.get('page'),request.form.get('customer'),request.form.get('contract_no'),request.form.get('upload_time')
+    all,page,customer,contract_no,check_date,check_status = request.form.get('all'),request.form.get('page'),request.form.get('customer'),request.form.get('contract_no'),request.form.get('upload_time'),request.form.get('check_status')
     execute = DataExecute()
     result=execute.unse_get_contract(contract_no,customer,check_date,page,all)
     return result
@@ -134,9 +129,9 @@ def link_refund():
 @main.route('/charge/commit/approve',methods=['POST'])
 @TokenTest
 def approve_commit():
-    user_id,comment_id,result = request.form.get('user_id'),request.form.get('commit_id'),request.form.get('result')
+    user_id,comment_id,result,comments = request.form.get('user_id'),request.form.get('commit_id'),request.form.get('result'),request.form.get('comments')
     execute = DataExecute()
-    result=execute.approve_commit(comment_id,result,user_id)
+    result=execute.approve_commit(comment_id,result,user_id,comments)
     return result
 
 #协商还款列表
@@ -159,8 +154,11 @@ def get_commit_detail():
     result=execute.get_commit_detail(commit_id)
     return result
 
-
-
+@main.route('/test',methods=['POST','GET'])
+def test():
+    execute= DataExecute()
+    execute.test()
+    return jsonify({'is':1})
 
 
 
