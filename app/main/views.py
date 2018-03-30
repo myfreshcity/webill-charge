@@ -154,11 +154,19 @@ def get_commit_detail():
     result=execute.get_commit_detail(commit_id)
     return result
 
+#按门店，渠道获取最新时间
+@main.route('/charge/refund/newest',methods=['GET'])
+def get_newest_date():
+    execute = DataExecute()
+    result=execute.get_newest_date()
+    return jsonify(result)
+
+
 @main.route('/test',methods=['POST','GET'])
 def test():
-    execute= DataExecute()
-    execute.test()
-    return jsonify({'is':1})
+    execute = DataExecute()
+    result=execute.get_commits()
+    return jsonify(result)
 
 
 

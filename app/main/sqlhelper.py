@@ -102,4 +102,23 @@ def delete_contract_by_no(contract_nos):
     param = (contract_nos,)
     return sql,param
 
+#获取各门店最新支付时间和渠道
+@SearchAll
+def refund_newest_date():
+    sql="SELECT MAX(r.refund_time) AS refund_time, IFNULL(r.bank, r.method) way, ct.shop AS shop FROM t_refund r LEFT JOIN t_contract ct ON r.contract_id = ct.id GROUP BY r.bank, r.method, ct.shop"
+    param = ()
+    return sql,param
 
+#获取实际还款
+@SearchAll
+def get_real_pays(contract_id):
+    sql="SELECT d.refund_time, d.refund_name, d.amount, IFNULL(d.bank, d.method) way FROM t_refund d WHERE d.contract_id = %s"
+    param=(contract_id,)
+    return sql,param
+
+#获取拒绝原因
+@Search
+def get_refuse_reason(contract_id):
+    sql="SELECT t.* FROM(SELECT cr.approve_remark,cr.result FROM t_commit_refund cr WHERE cr.contract_id = %s AND cr.result=0 ORDER BY cr.approve_date DESC) t LIMIT 1"
+    param=(contract_id,)
+    return sql,param
