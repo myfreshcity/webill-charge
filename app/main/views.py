@@ -161,6 +161,19 @@ def get_newest_date():
     result=execute.get_newest_date()
     return jsonify(result)
 
+#查询还款流水
+@main.route('/charge/refund/search',methods=['POST'])
+@TokenTest
+def search_refund():
+    file_id = request.form.get('file_id')
+    is_match = request.form.get('is_match')
+    refund_name = request.form.get('refund_name')
+    create_time = request.form.get('create_time')
+    page = request.form.get('page')
+    execute = DataExecute()
+    result=execute.search_refund(file_id,is_match,refund_name,create_time)
+    print(result)
+    return jsonify(result)
 
 @main.route('/test',methods=['POST','GET'])
 def test():

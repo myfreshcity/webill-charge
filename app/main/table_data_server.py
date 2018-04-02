@@ -27,7 +27,7 @@ class FileExecute:
             if contract_list:
                 for contract in contract_list:
                     self.update_contract(contract)
-                return {'isSucceed':200,'message':'上传成功'}
+                return {'isSucceed':200,'message':'上传成功','file_id':file_id}
             else:
                 return {'isSucceed': 500, 'message': '数据有误'}
         except:
@@ -666,6 +666,45 @@ class DataExecute:
         else:
             result_dic = {'isSucceed': 500, 'refund_list': '', 'message': '查询各门店最新支付时间失败！'}
         return result_dic
+    #还款流水查询
+    def search_refund(self,file_id=None,is_match=None,refund_name=None,create_time=None,page=1):
+        def get_query():
+            query = Refund.query
+            if file_id:
+                query = query.filter(Refund.file_id == file_id)
+            if refund_name:
+                query = query.filter(Refund.refund_name == refund_name)
+            if is_match == '0':
+                query = query.filter(Refund.contract_id.is_(None))
+            if is_match == '1':
+                query = query.filter(Refund.contract_id != '')
+            if create_time:
+                start_date = DateStrToDate(create_time, 0, 0, 0)
+                end_date = DateStrToDate(create_time, 23, 59, 59)
+                query = query.filter(Refund.create_time.between(start_date,end_date))
+            else:
+                start_date = datetime.datetime(1990, 1, 1)
+                end_date = datetime.datetime.now()
+            return query.all()
+
+        search_refunds = get_query()
+        num = len(search_refunds)
+        page_refunds = self.get_by_page(lists=search_refunds, page=page)
+        search_refund_list = []
+        if page_refunds:
+            for refund in page_refunds:
+                refundsStr = {'way': refund.method, 'refundTime': refund.refund_time.strftime("%Y-%m-%d %H:%M:%S"),
+                              'create_time': refund.create_time.strftime("%Y-%m-%d %H:%M:%S"),
+                              'refund_name': refund.refund_name, 'file_id': refund.file_id,
+                              'contract_id': refund.contract_id, 'card_id': refund.card_id,
+                              'amount': "%.2f" % (refund.amount / 100)}
+                search_refund_list.append(refundsStr)
+            result_dic = {'isSucceed': 200, 'search_refund_list': search_refund_list, 'message': '查询还款流水成功！','num':num}
+        else:
+            result_dic = {'isSucceed': 500, 'search_refund_list': '', 'message': '查询还款流水失败！'}
+        return  result_dic
+
+
 
 
 def ontime_refunds():
