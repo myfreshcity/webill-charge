@@ -24,12 +24,9 @@ class FileExecute:
             file_id = self.save_file()
             datatable = result['datatable']
             contract_list = self.save_file_in_db(self.file_kind,datatable,file_id)
-            if contract_list:
-                for contract in contract_list:
-                    self.update_contract(contract)
-                return {'isSucceed':200,'message':'上传成功','file_id':file_id}
-            else:
-                return {'isSucceed': 500, 'message': '数据有误'}
+            for contract in contract_list:
+                self.update_contract(contract)
+            return {'isSucceed':200,'message':'上传成功','file_id':file_id}
         except:
             return {'isSucceed': 500, 'message': '模板有误'}
 
@@ -667,7 +664,7 @@ class DataExecute:
             result_dic = {'isSucceed': 500, 'refund_list': '', 'message': '查询各门店最新支付时间失败！'}
         return result_dic
     #还款流水查询
-    def search_refund(self,file_id=None,is_match=None,refund_name=None,create_time=None,page=1):
+    def search_refund(self,file_id=None,is_match=None,refund_name=None,create_time=None,page=None):
         def get_query():
             query = Refund.query
             if file_id:
@@ -685,11 +682,21 @@ class DataExecute:
             else:
                 start_date = datetime.datetime(1990, 1, 1)
                 end_date = datetime.datetime.now()
+                query = query.filter(Refund.create_time.between(start_date,end_date))
             return query.all()
 
         search_refunds = get_query()
         num = len(search_refunds)
-        page_refunds = self.get_by_page(lists=search_refunds, page=page)
+        if page:
+            page=int(page)
+        else:page = 1
+
+        if (page-1)*10+10<=num:
+            page_refunds = search_refunds[(page-1)*10:(page-1)*10+10]
+        elif (page-1)*10<=num:
+            page_refunds = search_refunds[(page-1)*10:]
+        else:
+            page_refunds = []
         search_refund_list = []
         if page_refunds:
             for refund in page_refunds:
@@ -701,7 +708,7 @@ class DataExecute:
                 search_refund_list.append(refundsStr)
             result_dic = {'isSucceed': 200, 'search_refund_list': search_refund_list, 'message': '查询还款流水成功！','num':num}
         else:
-            result_dic = {'isSucceed': 500, 'search_refund_list': '', 'message': '查询还款流水失败！'}
+            result_dic = {'isSucceed': 200, 'search_refund_list': search_refund_list, 'message': '查询还款流水成功！','num':num}
         return  result_dic
 
 
