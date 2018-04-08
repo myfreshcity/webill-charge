@@ -152,6 +152,7 @@ class CommitRefund(db.Model):
     apply_date = db.Column(db.DateTime)
     applyer = db.Column(db.VARCHAR(20))
     type = db.Column(db.Integer)
+    discount_type = db.Column(db.Integer)
     amount = db.Column(db.Integer)
     deadline = db.Column(db.DateTime)
     approve_date = db.Column(db.DateTime)
