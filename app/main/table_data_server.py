@@ -264,6 +264,7 @@ class FileExecute:
 
 
 class DataExecute:
+    #对账处理
     def unse_get_contract(self,contract_no=None,customer=None,check_date=None,page=None,all=0):
         def convert(limit):
             if limit:return limit
@@ -445,7 +446,7 @@ class DataExecute:
 
 
 
-    def create_commit(self,contract_no,user_id,deadline,amount,commit,type=0):
+    def create_commit(self,contract_no,user_id,deadline,amount,commit,type=0,discount_type=0):
         contract = Contract.query.filter(Contract.contract_no==contract_no).first()
         if not contract:
             return {'isSucceed': 500, 'message': '未找到合同'}
@@ -457,11 +458,12 @@ class DataExecute:
         commit_refund.apply_date = now
         commit_refund.type = int(type)
         commit_refund.is_settled = 0
-        if type!=2:
-            commit_refund.applyer = int(user_id)
+        commit_refund.remark = commit
+        commit_refund.applyer = int(user_id)
+        if type==0:
+            commit_refund.discount_type = int(discount_type)
             commit_refund.deadline = DateStrToDate(deadline,23,59,59)
             commit_refund.amount = int(amount)*100
-            commit_refund.remark = commit
         contract.is_dealt =1
         db.session.add(commit_refund)
         db.session.add(contract)
@@ -710,6 +712,74 @@ class DataExecute:
         else:
             result_dic = {'isSucceed': 200, 'search_refund_list': search_refund_list, 'message': '查询还款流水成功！','num':num}
         return  result_dic
+
+    # 对账处理/贷款列表
+    def get_deal_refund(self,contract_no=None,customer=None,check_date=None,check_status=None,page=None,id_number=None):
+        def contruct_contract_dict(contract):
+            contract_dic = {}
+            contract_dic['contract_no'] = contract.contract_no
+            contract_dic['customer'] = contract.customer
+            contract_dic['loan_amount'] = "%.2f" % (contract.loan_amount / 100)
+            contract_dic['loan_date'] = contract.loan_date.strftime('%Y-%m-%d')
+            contract_dic['id_number'] = contract.id_number
+            contract_dic['tensor'] = contract.tensor
+            contract_dic['deal_status'] = contract.is_dealt
+            contract_dic['upload_time'] = contract.create_time.strftime("%Y-%m-%d")
+            now = datetime.datetime.now()
+            end_time = now.replace(hour=0, minute=0, second=0) + datetime.timedelta(days=1)
+
+            refund_plans = tRefundPlan.query.filter(tRefundPlan.contract_id == contract.id, tRefundPlan.is_settled == 0,
+                                                    tRefundPlan.deadline < end_time).all()
+            if refund_plans:
+                contract_dic['overtime_tensor'] = len(refund_plans)
+                contract_dic['check_status'] = 0
+            else:
+                contract_dic['overtime_tensor'] = 0
+                contract_dic['check_status'] = 1
+            return contract_dic
+
+        def get_query():
+            query = Contract.query
+            if contract_no:  # 合同编号
+                query = query.filter(Contract.contract_no == contract_no)
+            if customer:  # 客户名字
+                query = query.filter(Contract.customer == customer)
+            if check_status:  # 1为已处理，0为未处理
+                print(check_status)
+                query = query.filter(Contract.is_dealt == check_status)
+            if id_number:  # 证件号码
+                query = query.filter(Contract.id_number == id_number)
+            return query.all()
+
+        contracts = get_query()
+
+        contracts_list = []
+        now = datetime.datetime.now()
+        end_time = now.replace(hour=0, minute=0, second=0) + datetime.timedelta(days=1)
+        for contract in contracts:
+            overtime_plans = tRefundPlan.query.filter(tRefundPlan.contract_id == contract.id,tRefundPlan.is_settled == 0,tRefundPlan.deadline <= end_time).all()
+            if overtime_plans:
+                contracts_list.append(contract)
+        num = len(contracts)
+
+        if page:
+            page = int(page)
+        else:
+            page = 1
+
+        if (page - 1) * 10 + 10 <= num:
+            return_contracts = contracts_list[(page - 1) * 10:(page - 1) * 10 + 10]
+        elif (page - 1) * 10 <= num:
+            return_contracts = contracts_list[(page - 1) * 10:]
+        else:
+            return_contracts = []
+
+        contract_list = []
+        for return_contract in return_contracts:
+            contract_list.append(contruct_contract_dict(return_contract))
+        result = {'isSucceed': 200, 'message': '', 'contract_list': contract_list, 'num': num}
+        db.session.commit()
+        return result
 
 
 

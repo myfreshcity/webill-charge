@@ -73,7 +73,7 @@ def refund_upload():
             message ={'issucceed':500,'message':'未接收到文件'}
         return message
 
-#获取未完成合同表单
+#对账处理
 @main.route('/charge/contract/get',methods=['POST'])
 @TokenTest
 def get_contract():
@@ -82,6 +82,19 @@ def get_contract():
     result=execute.unse_get_contract(contract_no,customer,check_date,page,all)
     return result
 
+#对账处理/贷款列表
+@main.route('/charge/contract/select',methods=['POST'])
+@TokenTest
+def get_contract_deal():
+    page = request.form.get('page')
+    customer=request.form.get('customer')
+    contract_no=request.form.get('contract_no')
+    check_date=request.form.get('check_date')
+    id_number=request.form.get('id_number')
+    check_status=request.form.get('check_status')
+    execute = DataExecute()
+    result=execute.get_deal_refund(contract_no,customer,check_date,check_status,page,id_number)
+    return result
 
 #获取合同详细信息
 @main.route('/charge/contract/detail/get',methods=['POST'])
@@ -106,14 +119,14 @@ def unlinked_refund():
     return result
 
 
-#创建协商还款计划
+#修改还款信息
 @main.route('/charge/commit/create',methods=['POST'])
 @TokenTest
 def create_commit():
-    contract_no,user_id,amount,deadline,commit,type = request.form.get('contract_no'),request.form.get('user_id'), \
-                                                             request.form.get('amount'),request.form.get('deadline'),request.form.get('commit'),request.form.get('type')
+    contract_no,user_id,amount,deadline,commit,type,discount_type = request.form.get('contract_no'),request.form.get('user_id'), \
+                                                             request.form.get('amount'),request.form.get('deadline'),request.form.get('commit'),request.form.get('type'),request.form.get('discount_type')
     execute = DataExecute()
-    result = execute.create_commit(contract_no=contract_no,user_id=user_id,amount=amount,deadline=deadline,commit=commit,type=type)
+    result = execute.create_commit(contract_no=contract_no,user_id=user_id,amount=amount,deadline=deadline,commit=commit,type=type,discount_type=discount_type)
     return result
 
 #冲账
