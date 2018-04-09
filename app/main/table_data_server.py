@@ -683,7 +683,7 @@ class DataExecute:
                 start_date = datetime.datetime(1990, 1, 1)
                 end_date = datetime.datetime.now()
                 query = query.filter(Refund.create_time.between(start_date,end_date))
-            return query.all()
+            return query.order_by(Refund.create_time.desc()).all()
 
         search_refunds = get_query()
         num = len(search_refunds)
@@ -712,8 +712,32 @@ class DataExecute:
         return  result_dic
 
 
+#计算每日逾期费用
+def count_daily_delay():
+    from .sqlhelper import get_delay_refund,update_plan_fee
+    refunds = get_delay_refund()
+    if refunds:
+        for refund in refunds:
+            pid = refund['id']
+            contract_id = refund['contract_id']
+            contract = Contract.query.filter(Contract.id == contract_id).first()
+            contractAmt = contract.contract_amount #合同额
+            now = datetime.datetime.now()
+            delayDay = (now-refund['deadline']).days #逾期天数
+            fee = countFee(contractAmt,delayDay)
+
+            update_plan_fee(fee,delayDay, pid)
+            #update_contract(is_dealt=0,is_settled=0,contract_id=contract_id)
+
+#滞纳金算法
+def countFee(contractAmt,delayDay):
+    if contractAmt >= 10000:
+        return delayDay*200
+    else:
+        return delayDay*100
 
 
+#根据还款情况同步合同状态
 def ontime_refunds():
     from .sqlhelper import ontime_refund,update_contract
     refunds = ontime_refund()
@@ -723,7 +747,7 @@ def ontime_refunds():
             print(contract_id)
             update_contract(is_dealt=0,is_settled=0,contract_id=contract_id)
 
-
+#回滚失效的减免申请
 def ontime_commits():
     from .sqlhelper import ontime_commit,update_commit,update_plan_by_commit
     commits = ontime_commit()
