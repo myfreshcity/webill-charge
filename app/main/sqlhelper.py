@@ -54,6 +54,17 @@ def Insert(func):
     return out
 
 
+#获取逾期记录
+@SearchAll
+def get_delay_refund():
+    now = datetime.datetime.now()
+    start_time = now.replace(hour=0,minute=1,second=0)
+    sql = "SELECT id,contract_id,deadline from t_refund_plan WHERE is_settled=0 and deadline < %s"
+    param = (start_time,)
+    return sql,param
+
+
+#获取当日应还但未还的记录
 @SearchAll
 def ontime_refund():
     now = datetime.datetime.now()
@@ -82,6 +93,13 @@ def ontime_commit():
     end_time = now.replace(hour=0,minute=0,second=0)+datetime.timedelta(days=1)
     sql="select * from t_commit_refund where is_valid=1 and is_settled=0 and deadline<=%s"
     param  = (end_time,)
+    return sql,param
+
+
+@Insert
+def update_plan_fee(fee,delay_day,id):
+    sql='UPDATE t_refund_plan SET fee = %s,delay_day = %s where id = %s'
+    param = (fee,delay_day,id)
     return sql,param
 
 @Insert
