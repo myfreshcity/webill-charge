@@ -732,7 +732,7 @@ class DataExecute:
                                                     tRefundPlan.deadline < end_time).all()
             if refund_plans:
                 contract_dic['overtime_tensor'] = len(refund_plans)
-                contract_dic['check_status'] = 0
+                contract_dic['is_settled'] = 0
             else:
                 contract_dic['overtime_tensor'] = 0
                 contract_dic['check_status'] = 1
