@@ -1,3 +1,6 @@
+ALTER TABLE `t_commit_refund`
+MODIFY COLUMN `deadline`  datetime NULL COMMENT '截止日期' AFTER `amount`;
+
 /*协商表修改 20180411*/
 ALTER TABLE `t_commit_refund`
 DROP COLUMN `is_settled`,

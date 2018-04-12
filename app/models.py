@@ -164,7 +164,6 @@ class CommitRefund(db.Model):
     approver = db.Column(db.VARCHAR(20))
     approve_remark = db.Column(db.VARCHAR)
     result = db.Column(db.Integer)
-    is_settled = db.Column(db.Integer)
     is_valid = db.Column(db.Integer)
     remark = db.Column(db.TEXT)
     plans = db.relationship('tRefundPlan',backref='commit')

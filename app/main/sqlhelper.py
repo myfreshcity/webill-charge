@@ -91,7 +91,7 @@ def update_contract(is_dealt,is_settled,contract_id):
 def ontime_commit():
     now = datetime.datetime.now()
     end_time = now.replace(hour=0,minute=0,second=0)+datetime.timedelta(days=1)
-    sql="select * from t_commit_refund where is_valid=1 and is_settled=0 and deadline<=%s"
+    sql="select * from t_commit_refund where is_valid=0 and deadline<=%s"
     param  = (end_time,)
     return sql,param
 
