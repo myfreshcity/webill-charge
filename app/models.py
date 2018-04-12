@@ -104,6 +104,7 @@ class tRefundPlan(db.Model):
     file_id = db.Column(db.ForeignKey('t_upload_file.id'))
     tensor = db.Column(db.Integer)
     delay_day = db.Column(db.Integer)
+    amt = db.Column(db.Integer)
     fee = db.Column(db.Integer)
     actual_amt = db.Column(db.Integer)
     actual_fee = db.Column(db.Integer)
@@ -142,6 +143,7 @@ class Refund(db.Model):
     refund_time = db.Column(db.DateTime)
     method = db.Column(db.VARCHAR(20))
     amount = db.Column(db.Integer)
+    remain_amt = db.Column(db.Integer)
     bank = db.Column(db.VARCHAR(30))
     card_id = db.Column(db.Integer)
     create_time = db.Column(db.DateTime,default=datetime.datetime.now())
@@ -164,12 +166,10 @@ class CommitRefund(db.Model):
     approver = db.Column(db.VARCHAR(20))
     approve_remark = db.Column(db.VARCHAR)
     result = db.Column(db.Integer)
-    is_settled = db.Column(db.Integer)
     is_valid = db.Column(db.Integer)
     remark = db.Column(db.TEXT)
     plans = db.relationship('tRefundPlan',backref='commit')
     create_time = db.Column(db.DateTime)
-
 
 
 
