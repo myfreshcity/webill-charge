@@ -43,7 +43,7 @@ def download_refund():
     filename = "refund.xls"
     return send_from_directory(dictory,filename,as_attachment=True)
 
-#上传还款计划书
+#上传合同和还款计划书
 @main.route('/charge/plan/upload',methods=['POST','GET'])
 @TokenTest
 def plan_upload():
@@ -103,9 +103,10 @@ def get_contract_detail():
     data = request.get_data()
     j_data = json.loads(data.decode())
     contract_no = j_data['contract_no']
+    contract_id = j_data['contract_id']
     is_overtime  = j_data['is_overtime']
     execute = DataExecute()
-    result = execute.contract_detail(contract_no,is_overtime=is_overtime)
+    result = execute.contract_detail(contract_no,is_overtime,contract_id)
     return result
 
 
