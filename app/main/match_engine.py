@@ -193,6 +193,7 @@ def match_contract_refund(contract, refund=None, prePay=True):
 
 # 多笔合同冲账
 def batch_match_refund(refund):
+    results = []
     # 根据姓名寻找待还款的合同
     # 移交外催的合同不自动处理，但可人工冲账
     contracts = Contract.query.filter(Contract.customer == refund.refund_name,
@@ -204,6 +205,7 @@ def batch_match_refund(refund):
         for c in contracts:
             if id_no != c.id_number:  # 如果身份证号码不同，则确认为同名客户
                 app.logger.warning('还款流水[%s] 发现同名客户的合同', refund.id)
+                results.append({'code': 5005, 'msg': '还款流水[%s] 发现同名客户的合同' % (refund.id)})
                 same_name_error = True
                 break
         if not same_name_error:
@@ -211,23 +213,31 @@ def batch_match_refund(refund):
             cl = len(contracts)
             # 如果是单笔合同,可提前还款
             if cl == 1:
-                match_contract_refund(contracts[0], refund)
+                r = match_contract_refund(contracts[0], refund)
+                if r:
+                    results.append(r)
             elif cl > 1:
                 # 如果是多笔合同，先处理每笔合同逾期情况，余额再作为提前还款
                 if refund.remain_amt > 0:
                     # 先不要处理提前还款
                     for c in contracts:
-                        match_contract_refund(c, refund, False)
+                        r = match_contract_refund(c, refund, False)
+                        if r:
+                            results.append(r)
                         if refund.remain_amt <= 0:
                             break
                 if refund.remain_amt > 0:
                     # 如有余额再进行提前还款
                     for c in contracts:
-                        match_contract_refund(c, refund, True)
+                        r = match_contract_refund(c, refund, True)
+                        if r:
+                            results.append(r)
                         if refund.remain_amt <= 0:
                             break
     else:
         app.logger.warning('还款流水[%s] 没有找到可冲账合同', refund.id)
+        results.append({'code': 5006, 'msg': '还款流水[%s] 没有找到可冲账合同' % (refund.id)})
+    return results
 
 
 # 有无减免审批中的合同
