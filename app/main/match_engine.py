@@ -3,7 +3,7 @@ from app.models import *
 
 
 # 真实流水冲帐
-def do_real_fund(contract, tplans, refund):
+def do_real_fund(contract, tplans, refund,isclose):
     # 逐期冲帐
     if refund.remain_amt <= 0:
         app.logger.info('还款流水[%s]余额不足:%s', refund.id, refund.remain_amt)
@@ -11,45 +11,57 @@ def do_real_fund(contract, tplans, refund):
 
     app.logger.info('还款流水[%s]开始冲账,余额:%s', refund.id, refund.remain_amt)
 
-    for plan in tplans:
-        # 先冲本息
-        ac = plan.amt - plan.actual_amt  # 计算应冲值金额
-        if ac > 0 and refund.remain_amt > 0:
-            _b = min(refund.remain_amt, ac)  # 取最小值冲账
-            plan.actual_amt += _b
-            refund.remain_amt -= _b
-            refund.contract_id = plan.contract_id
-            plan.settled_date = refund.refund_time
-            add_match_log(0, contract.id, plan.id, refund.id,
-                          _b, refund.remain_amt,
-                          plan.amt - plan.actual_amt)
-            app.logger.info('还款流水[%s]冲还款计划[%s]本息:%s,流水余额:%s,本息余额:%s',
-                            refund.id, plan.id,
-                            _b, refund.remain_amt,
-                            plan.amt - plan.actual_amt)
-        # 再冲滞纳金
-        recount_fee(plan, refund, contract) # 重新计算滞纳金
-        fc = plan.fee - plan.actual_fee  # 计算应冲值金额
-        if fc > 0 and refund.remain_amt > 0:
-            _a = min(refund.remain_amt, fc)  # 取最小值冲账
-            plan.actual_fee += _a
-            refund.remain_amt -= _a
-            refund.contract_id = plan.contract_id
-            plan.settled_date = refund.refund_time
-            add_match_log(1, contract.id, plan.id, refund.id,
-                          _a, refund.remain_amt,
-                          plan.amt - plan.actual_amt)
-            app.logger.info('还款流水[%s]冲还款计划[%s]滞纳金:%s,流水余额:%s,滞纳金余额:%s',
-                            refund.id, plan.id,
-                            _a, refund.remain_amt,
-                            plan.fee - plan.actual_fee)
+    if isclose:
+        for plan in tplans:
+            balance_amount(plan, refund, contract)
+        for plan in tplans:
+            balance_fee(plan, refund, contract)
+    else:
+        for plan in tplans:
+            balance_amount(plan, refund, contract)
+            balance_fee(plan, refund, contract)
+
+
+#冲本息
+def balance_amount(plan,refund,contract):
+    ac = plan.amt - plan.actual_amt  # 计算应冲值金额
+    if ac > 0 and refund.remain_amt > 0:
+        _b = min(refund.remain_amt, ac)  # 取最小值冲账
+        plan.actual_amt += _b
+        refund.remain_amt -= _b
+        refund.contract_id = plan.contract_id
+        plan.settled_date = refund.refund_time
+        add_match_log(0, contract.id, plan.id, refund.id,
+                      _b, refund.remain_amt,
+                      plan.amt - plan.actual_amt)
+        app.logger.info('还款流水[%s]冲还款计划[%s]本息:%s,流水余额:%s,本息余额:%s',
+                        refund.id, plan.id,
+                        _b, refund.remain_amt,
+                        plan.amt - plan.actual_amt)
+#冲滞纳金
+def balance_fee(plan,refund,contract):
+    recount_fee(plan, refund, contract)  # 重新计算滞纳金
+    fc = plan.fee - plan.actual_fee  # 计算应冲值金额
+    if fc > 0 and refund.remain_amt > 0:
+        _a = min(refund.remain_amt, fc)  # 取最小值冲账
+        plan.actual_fee += _a
+        refund.remain_amt -= _a
+        refund.contract_id = plan.contract_id
+        plan.settled_date = refund.refund_time
+        add_match_log(1, contract.id, plan.id, refund.id,
+                      _a, refund.remain_amt,
+                      plan.amt - plan.actual_amt)
+        app.logger.info('还款流水[%s]冲还款计划[%s]滞纳金:%s,流水余额:%s,滞纳金余额:%s',
+                        refund.id, plan.id,
+                        _a, refund.remain_amt,
+                        plan.fee - plan.actual_fee)
 
 
 # 减去多计算滞纳金
 def recount_fee(plan, refund, contract):
     (delayDay, fee) = get_fee(plan, refund, contract)
-    if refund.remain_amt > 0:
-        if delayDay != plan.delay_day:
+    if refund.remain_amt > 0 :
+        if delayDay > 0 and delayDay != plan.delay_day:
             app.logger.info('还款流水[%s]因导入时间和实际还款时间的不一致，调整还款计划[%s]逾期天数:%s，滞纳金:%s,为逾期天数:%s，滞纳金:%s',
                             refund.id, plan.id, plan.delay_day, plan.fee, delayDay,fee)
             plan.fee = fee
@@ -84,18 +96,6 @@ def get_reduce_plan(contract, refund):
         return None
 
 
-# 减免处理
-def do_reduce(contract, refund, commit_plan):
-    v = 0
-    if commit_plan:
-        # 如果存款时间在申请当天，审批额度则有效
-        deadline_time = commit_plan.apply_date.replace(hour=23, minute=59, second=59)
-        fund_time = refund.refund_time if refund else commit_plan.apply_date  # 如果是事后减免取申请时间
-        if fund_time < deadline_time:
-            v += commit_plan.remain_amt
-    return v
-
-
 # 按照还款情况单笔冲账
 def do_contract_refund(contract, tplans, refund=None, commit_plan=None):
     # 已结清的合同不应再重复处理
@@ -111,7 +111,8 @@ def do_contract_refund(contract, tplans, refund=None, commit_plan=None):
             app.logger.info('用还款流水[%s]冲贷款合同[%s]时未发现还款计划', refund.id, contract.id)
             return {'code': 5003, 'msg': '贷款合同[%s]未发现还款计划' % (contract.contract_no)}
         else:
-            do_real_fund(contract, tplans, refund)
+            isClose = check_close(commit_plan)
+            do_real_fund(contract, tplans, refund, isClose)
 
     # 结清状态计算
     v = 0
@@ -128,6 +129,8 @@ def do_contract_refund(contract, tplans, refund=None, commit_plan=None):
             if commit_plan:
                 commit_plan.remain_amt -= offV
             v -= offV
+        else:
+            break
 
     # 同步合同状态
     if not get_refund_plan(contract.id, 0):
@@ -154,36 +157,43 @@ def get_refund_plan(contract_id, flag):
     tplans = tplans.order_by(tRefundPlan.deadline.asc()).all()
     return tplans
 
+# 是否一次结清
+def check_close(commit_plan):
+    is_close = False
+    if commit_plan:
+        if commit_plan.discount_type == 1:  # 一次结清
+            is_close = True
+    return is_close
+
 
 # 单笔合同冲账
 def match_contract_refund(contract, refund=None, prePay=True):
     result = None
-    is_close = False  # 是否一次结清
-
     commit_plan = get_reduce_plan(contract, refund)
-    if commit_plan:
-        if commit_plan.discount_type == 1:  # 一次结清
-            is_close = True
+    is_close = check_close(commit_plan)  # 是否一次结清
 
     if is_close:
         plans = get_refund_plan(contract.id, 0)
         if not refund or refund.remain_amt > 0:
-            result = do_contract_refund(contract, plans, refund)
+            result = do_contract_refund(contract, plans, refund,commit_plan)
     else:
         plans = get_refund_plan(contract.id, 1)
         # 优先处理逾期的计划
         if not refund or refund.remain_amt > 0:
-            result = do_contract_refund(contract, plans, refund)
+            result = do_contract_refund(contract, plans, refund,commit_plan)
         # 余额按照提前还款处理
         if prePay:
             if not refund or refund.remain_amt > 0:
                 plans = get_refund_plan(contract.id, 2)
-                result = do_contract_refund(contract, plans, refund)
+                result = do_contract_refund(contract, plans, refund,commit_plan)
+    if result:
+        app.logger.warn(result)
     return result
 
 
 # 多笔合同冲账
 def batch_match_refund(refund):
+    results = []
     # 根据姓名寻找待还款的合同
     # 移交外催的合同不自动处理，但可人工冲账
     contracts = Contract.query.filter(Contract.customer == refund.refund_name,
@@ -195,6 +205,7 @@ def batch_match_refund(refund):
         for c in contracts:
             if id_no != c.id_number:  # 如果身份证号码不同，则确认为同名客户
                 app.logger.warning('还款流水[%s] 发现同名客户的合同', refund.id)
+                results.append({'code': 5005, 'msg': '还款流水[%s] 发现同名客户的合同' % (refund.id)})
                 same_name_error = True
                 break
         if not same_name_error:
@@ -202,23 +213,31 @@ def batch_match_refund(refund):
             cl = len(contracts)
             # 如果是单笔合同,可提前还款
             if cl == 1:
-                match_contract_refund(contracts[0], refund)
+                r = match_contract_refund(contracts[0], refund)
+                if r:
+                    results.append(r)
             elif cl > 1:
                 # 如果是多笔合同，先处理每笔合同逾期情况，余额再作为提前还款
                 if refund.remain_amt > 0:
                     # 先不要处理提前还款
                     for c in contracts:
-                        match_contract_refund(c, refund, False)
+                        r = match_contract_refund(c, refund, False)
+                        if r:
+                            results.append(r)
                         if refund.remain_amt <= 0:
                             break
                 if refund.remain_amt > 0:
                     # 如有余额再进行提前还款
                     for c in contracts:
-                        match_contract_refund(c, refund, True)
+                        r = match_contract_refund(c, refund, True)
+                        if r:
+                            results.append(r)
                         if refund.remain_amt <= 0:
                             break
     else:
         app.logger.warning('还款流水[%s] 没有找到可冲账合同', refund.id)
+        results.append({'code': 5006, 'msg': '还款流水[%s] 没有找到可冲账合同' % (refund.id)})
+    return results
 
 
 # 有无减免审批中的合同
