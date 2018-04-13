@@ -173,6 +173,20 @@ class CommitRefund(db.Model):
     create_time = db.Column(db.DateTime)
 
 
+class FundMatchLog(db.Model):
+    __tablename__='t_fund_match_log'
+    id = db.Column(db.Integer(), primary_key=True)
+    match_type = db.Column(db.Integer, default=0)
+    plan_id = db.Column(db.Integer,default=0)
+    fund_id = db.Column(db.Integer,default=0)
+    contract_id = db.Column(db.Integer,default=0)
+    amount = db.Column(db.Integer,default=0)
+    f_remain_amt = db.Column(db.Integer,default=0)
+    p_remain_amt = db.Column(db.Integer,default=0)
+    remark = db.Column(db.VARCHAR(2000))
+    t_status = db.Column(db.Integer,default=0)
+    created_time = db.Column(db.DateTime,default=datetime.datetime.now())
+
 
 
 
