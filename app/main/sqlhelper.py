@@ -59,7 +59,8 @@ def Insert(func):
 def get_delay_refund():
     now = datetime.datetime.now()
     start_time = now.replace(hour=0,minute=1,second=0)
-    sql = "SELECT id,contract_id,deadline from t_refund_plan WHERE is_settled=0 and deadline < %s"
+    #已还清本息的贷款不再计算滞纳金
+    sql = "SELECT id,contract_id,deadline from t_refund_plan WHERE is_settled=0 and actual_amt >= amt and deadline < %s"
     param = (start_time,)
     return sql,param
 
