@@ -43,7 +43,7 @@ def download_refund():
     filename = "refund.xls"
     return send_from_directory(dictory,filename,as_attachment=True)
 
-#上传还款计划书
+#上传合同和还款计划书
 @main.route('/charge/plan/upload',methods=['POST','GET'])
 @TokenTest
 def plan_upload():
@@ -96,16 +96,17 @@ def get_contract_deal():
     result=execute.get_deal_refund(contract_no,customer,check_date,check_status,page,id_number)
     return result
 
-#获取合同详细信息
+#获取合同详细信息(对账详情，上半部分)
 @main.route('/charge/contract/detail/get',methods=['POST'])
 @TokenTest
 def get_contract_detail():
     data = request.get_data()
     j_data = json.loads(data.decode())
     contract_no = j_data['contract_no']
+    contract_id = j_data['contract_id']
     is_overtime  = j_data['is_overtime']
     execute = DataExecute()
-    result = execute.contract_detail(contract_no,is_overtime=is_overtime)
+    result = execute.contract_detail(contract_no,is_overtime,contract_id)
     return result
 
 
@@ -123,10 +124,14 @@ def unlinked_refund():
 @main.route('/charge/commit/create',methods=['POST'])
 @TokenTest
 def create_commit():
-    contract_no,user_id,amount,deadline,commit,type,discount_type = request.form.get('contract_no'),request.form.get('user_id'), \
-                                                             request.form.get('amount'),request.form.get('deadline'),request.form.get('commit'),request.form.get('type'),request.form.get('discount_type')
+    contract_no = request.form.get('contract_no')
+    user_id = request.form.get('user_id')
+    amount = request.form.get('amount')
+    commit = request.form.get('commit')
+    type = request.form.get('type')
+    discount_type = request.form.get('discount_type')
     execute = DataExecute()
-    result = execute.create_commit(contract_no=contract_no,user_id=user_id,amount=amount,deadline=deadline,commit=commit,type=type,discount_type=discount_type)
+    result = execute.create_commit(contract_no=contract_no,user_id=user_id,amount=amount,commit=commit,type=type,discount_type=discount_type)
     return result
 
 #冲账

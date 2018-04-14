@@ -103,7 +103,7 @@ class tRefundPlan(db.Model):
     deadline = db.Column(db.DateTime)
     file_id = db.Column(db.ForeignKey('t_upload_file.id'))
     tensor = db.Column(db.Integer)
-    delay_day = db.Column(db.Integer)
+    delay_day = db.Column(db.Integer,default=0)
     amt = db.Column(db.Integer)
     fee = db.Column(db.Integer)
     actual_amt = db.Column(db.Integer)
