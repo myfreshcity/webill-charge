@@ -46,22 +46,22 @@ def main():
     # set_cond_001()  # 单期逾期
     # set_cond_002()  # 多期逾期
 
-    reduce_001()  # 清欠
+    #reduce_001()  # 清欠
     # reduce_002()  # 结清
-    db.session.commit()
+    #db.session.commit()
 
     # 对账设置
     # repayment_001()  # 导入冲账
     # repayment_002()  # 指定冲账
-    repayment_003()  # 还款后冲账
+    #repayment_003()  # 还款后冲账
 
-    # query_info()
+    query_info()
 
 
 
 #导入冲账
 def repayment_001():
-    refund = Refund.query.filter(Refund.id == '103').first()
+    refund = Repayment.query.filter(Repayment.id == '103').first()
     refund.remain_amt = 5000
     refund.refund_time = datetime.datetime.now() - datetime.timedelta(days=1)
     result = match_by_refund(refund)
@@ -70,7 +70,7 @@ def repayment_001():
 
 #指定流水冲账
 def repayment_002():
-    refund = Refund.query.filter(Refund.id == '104').first()
+    refund = Repayment.query.filter(Repayment.id == '104').first()
     refund.remain_amt = 5000
     refund.refund_time = datetime.datetime.now() - datetime.timedelta(days=1)
     contract = Contract.query.filter(Contract.id == '25').first()
@@ -89,9 +89,9 @@ def repayment_003():
 #单期逾期
 def set_cond_001():
     contract = Contract.query.filter(Contract.id == '25').first()
-    plan = tRefundPlan.query.filter(tRefundPlan.id == '49').first()
-    plan2 = tRefundPlan.query.filter(tRefundPlan.id == '50').first()
-    plan3 = tRefundPlan.query.filter(tRefundPlan.id == '51').first()
+    plan = RefundPlan.query.filter(RefundPlan.id == '49').first()
+    plan2 = RefundPlan.query.filter(RefundPlan.id == '50').first()
+    plan3 = RefundPlan.query.filter(RefundPlan.id == '51').first()
 
     # 重置合同状态
     contract.is_settled = 0
@@ -125,9 +125,9 @@ def set_cond_001():
 # 多期逾期包含减免
 def set_cond_002():
     contract = Contract.query.filter(Contract.id == '25').first()
-    plan = tRefundPlan.query.filter(tRefundPlan.id == '49').first()
-    plan2 = tRefundPlan.query.filter(tRefundPlan.id == '50').first()
-    plan3 = tRefundPlan.query.filter(tRefundPlan.id == '51').first()
+    plan = RefundPlan.query.filter(RefundPlan.id == '49').first()
+    plan2 = RefundPlan.query.filter(RefundPlan.id == '50').first()
+    plan3 = RefundPlan.query.filter(RefundPlan.id == '51').first()
 
     # 重置合同状态
     contract.is_settled = 0
@@ -175,10 +175,10 @@ def reduce_002():
 
 def query_info():
     contract = Contract.query.filter(Contract.id == '25').first()
-    plan = tRefundPlan.query.filter(tRefundPlan.id == '49').first()
-    plan2 = tRefundPlan.query.filter(tRefundPlan.id == '50').first()
-    plan3 = tRefundPlan.query.filter(tRefundPlan.id == '51').first()
-    refund = Refund.query.filter(Refund.id == '103').first()
+    plan = RefundPlan.query.filter(RefundPlan.id == '49').first()
+    plan2 = RefundPlan.query.filter(RefundPlan.id == '50').first()
+    plan3 = RefundPlan.query.filter(RefundPlan.id == '51').first()
+    refund = Repayment.query.filter(Repayment.id == '103').first()
 
     #app.logger.info('contract:%s',json.dumps(contract, cls=AlchemyEncoder))
     app.logger.info('contract:%s', contract.is_settled)

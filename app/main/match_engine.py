@@ -1,4 +1,4 @@
-from app import app
+from app import app, celery
 from app.models import *
 
 
@@ -79,10 +79,10 @@ def get_fee(plan, refund, contract):
 
 # 获取有效减免审批建议
 def get_reduce_plan(contract, refund):
-    commit_plan = CommitRefund.query.filter(CommitRefund.contract_id == contract.id,
-                                            CommitRefund.type == 1,
-                                            CommitRefund.result == 100
-                                            ).order_by(CommitRefund.apply_date.desc()).first()
+    commit_plan = CommitInfo.query.filter(CommitInfo.contract_id == contract.id,
+                                          CommitInfo.type == 1,
+                                          CommitInfo.result == 100
+                                          ).order_by(CommitInfo.apply_date.desc()).first()
     if commit_plan:
         # 如果存款时间在申请当天，审批额度则有效
         deadline_time = commit_plan.apply_date.replace(hour=23, minute=59, second=59)
@@ -139,15 +139,15 @@ def do_contract_refund(contract, tplans, refund=None, commit_plan=None):
 
 # 获取未还清还款计划 0:全部 1:仅逾期 2:仅未到期
 def get_refund_plan(contract_id, flag):
-    tplans = tRefundPlan.query.filter(tRefundPlan.contract_id == contract_id,
-                                      tRefundPlan.is_settled == 0)
+    tplans = ContractRepay.query.filter(ContractRepay.contract_id == contract_id,
+                                     ContractRepay.is_settled == 0)
 
     if flag == 1:  # 逾期
-        tplans = tplans.filter(tRefundPlan.deadline < datetime.datetime.now())
+        tplans = tplans.filter(ContractRepay.deadline < datetime.datetime.now())
     if flag == 2:  # 未到期
-        tplans = tplans.filter(tRefundPlan.deadline >= datetime.datetime.now())
+        tplans = tplans.filter(ContractRepay.deadline >= datetime.datetime.now())
 
-    tplans = tplans.order_by(tRefundPlan.deadline.asc()).all()
+    tplans = tplans.order_by(ContractRepay.deadline.asc()).all()
     return tplans
 
 # 是否一次结清
@@ -193,6 +193,9 @@ def match_by_contract(contract, refund=None, prePay=True):
             if not refund or refund.remain_amt > 0:
                 plans = get_refund_plan(contract.id, 2)
                 do_contract_refund(contract, plans, refund,commit_plan)
+    # 同步refund状态
+    if refund:
+        refund.t_status = 1 if refund.contranct_id else 2
 
 
 # 指定还款流水冲账
@@ -245,10 +248,10 @@ def match_by_refund(refund):
 
 # 有无减免审批中的合同
 def check_exam_contract(contract):
-    commit_plan = CommitRefund.query.filter(CommitRefund.contract_id == contract.id,
-                                            CommitRefund.type == 1,
-                                            CommitRefund.result == 0
-                                            ).all()
+    commit_plan = CommitInfo.query.filter(CommitInfo.contract_id == contract.id,
+                                          CommitInfo.type == 1,
+                                          CommitInfo.result == 0
+                                          ).all()
     return commit_plan
 
 # 增加对账日志
@@ -270,3 +273,4 @@ def countFee(contractAmt, delayDay):
         return delayDay * 200 * 100
     else:
         return delayDay * 100 * 100
+

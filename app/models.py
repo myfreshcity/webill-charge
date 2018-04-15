@@ -75,48 +75,45 @@ class Contract(db.Model):
     __tablename__='t_contract'
     id = db.Column(db.Integer(), primary_key=True)
     contract_no = db.Column(db.VARCHAR(50),unique=True)
-    customer = db.Column(db.VARCHAR(20))
-    mobile_no = db.Column(db.VARCHAR(20))
-    id_number = db.Column(db.VARCHAR(20))
-    shop = db.Column(db.VARCHAR(20))
-    tensor = db.Column(db.Integer)
-    contract_amount = db.Column(db.Integer)
-    loan_amount = db.Column(db.Integer)
+    customer = db.Column(db.VARCHAR(20),default='')
+    mobile_no = db.Column(db.VARCHAR(20),default='')
+    id_number = db.Column(db.VARCHAR(20),default='')
+    shop = db.Column(db.VARCHAR(20),default='')
+    tensor = db.Column(db.Integer,default=0)
+    contract_amount = db.Column(db.Integer,default=0)
+    loan_amount = db.Column(db.Integer,default=0)
     loan_date = db.Column(db.DateTime)
     remain_sum = db.Column(db.Integer,default=0)
     refund_sum  =db.Column(db.Integer,default=0)
     is_settled = db.Column(db.Integer,default=0)
     is_dealt = db.Column(db.Integer,default=0)
-    file_id = db.Column(db.Integer)
+    file_id = db.Column(db.Integer,default=0)
     create_time = db.Column(db.DateTime)
-    refund_plans = db.relationship("tRefundPlan",backref='contract')
-    refund = db.relationship('Refund', backref='contract')
-    commit = db.relationship('CommitRefund',backref='contract')
 
     def __repr__(self):
         return "<Contract %s>"%self.contract_no
 
-class tRefundPlan(db.Model):
-    __tablename = 't_refund_plan'
+class ContractRepay(db.Model):
+    __tablename__ = 't_contract_repay'
     id = db.Column(db.Integer(), primary_key=True)
     contract_id = db.Column(db.ForeignKey('t_contract.id'))
     deadline = db.Column(db.DateTime)
     file_id = db.Column(db.ForeignKey('t_upload_file.id'))
-    tensor = db.Column(db.Integer)
+    tensor = db.Column(db.Integer,default=0)
     delay_day = db.Column(db.Integer,default=0)
-    amt = db.Column(db.Integer)
-    fee = db.Column(db.Integer)
-    actual_amt = db.Column(db.Integer)
-    actual_fee = db.Column(db.Integer)
-    principal = db.Column(db.Integer)
-    interest = db.Column(db.Integer)
+    amt = db.Column(db.Integer,default=0)
+    fee = db.Column(db.Integer,default=0)
+    actual_amt = db.Column(db.Integer,default=0)
+    actual_fee = db.Column(db.Integer,default=0)
+    principal = db.Column(db.Integer,default=0)
+    interest = db.Column(db.Integer,default=0)
     is_settled = db.Column(db.Integer,default=0)
     settled_date = db.Column(db.DateTime)
-    settled_by_commit = db.Column(db.ForeignKey('t_commit_refund.id'))
+    settled_by_commit = db.Column(db.ForeignKey('t_commit_info.id'))
 
 
     def __repr__(self):
-        return "<RefundPlan %s>"%self.id
+        return "<ContractRepay %s>"%self.id
 
 
 class UploadFile(db.Model):
@@ -127,15 +124,13 @@ class UploadFile(db.Model):
     upload_date = db.Column(db.DateTime)
     file_dir = db.Column(db.VARCHAR(255))
     is_valid = db.Column(db.Integer,default=1)
-    trefundplan = db.relationship('tRefundPlan',backref='file')
-    refund = db.relationship('Refund',backref='file')
 
     def __repr__(self):
         return "<File %s>"%self.file_name
 
 
-class Refund(db.Model):
-    __tablename__='t_refund'
+class Repayment(db.Model):
+    __tablename__='t_repayment'
     id = db.Column(db.Integer(), primary_key=True)
     file_id = db.Column(db.ForeignKey('t_upload_file.id'))
     contract_id = db.Column(db.ForeignKey('t_contract.id'))
@@ -146,14 +141,15 @@ class Refund(db.Model):
     remain_amt = db.Column(db.Integer)
     bank = db.Column(db.VARCHAR(30))
     card_id = db.Column(db.Integer)
+    t_status = db.Column(db.Integer,default=0)
     create_time = db.Column(db.DateTime,default=datetime.datetime.now())
 
     def __repr__(self):
-        return "<Refund %s>"%self.refund_name
+        return "<Repayment %s>"%self.refund_name
 
 
-class CommitRefund(db.Model):
-    __tablename__='t_commit_refund'
+class CommitInfo(db.Model):
+    __tablename__='t_commit_info'
     id = db.Column(db.Integer(), primary_key=True)
     contract_id = db.Column(db.ForeignKey('t_contract.id'))
     apply_date = db.Column(db.DateTime)
@@ -169,7 +165,6 @@ class CommitRefund(db.Model):
     result = db.Column(db.Integer)
     is_valid = db.Column(db.Integer)
     remark = db.Column(db.TEXT)
-    plans = db.relationship('tRefundPlan',backref='commit')
     create_time = db.Column(db.DateTime)
 
 
