@@ -195,7 +195,7 @@ def match_by_contract(contract, refund=None, prePay=True):
                 do_contract_refund(contract, plans, refund,commit_plan)
     # 同步refund状态
     if refund:
-        refund.t_status = 1 if refund.contranct_id else 2
+        refund.t_status = 1 if refund.contract_id else 2
 
 
 # 指定还款流水冲账
