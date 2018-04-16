@@ -80,6 +80,7 @@ class Contract(db.Model):
     id_number = db.Column(db.VARCHAR(20),default='')
     shop = db.Column(db.VARCHAR(20),default='')
     tensor = db.Column(db.Integer,default=0)
+    delayed_day = db.Column(db.Integer,default=0)
     contract_amount = db.Column(db.Integer,default=0)
     loan_amount = db.Column(db.Integer,default=0)
     loan_date = db.Column(db.DateTime)

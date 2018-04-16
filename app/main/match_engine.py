@@ -147,7 +147,7 @@ def get_refund_plan(contract_id, flag):
     if flag == 2:  # 未到期
         tplans = tplans.filter(ContractRepay.deadline >= datetime.datetime.now())
 
-    tplans = tplans.order_by(ContractRepay.deadline.asc()).all()
+    tplans = tplans.order_by(ContractRepay.deadline.desc()).all()
     return tplans
 
 # 是否一次结清
