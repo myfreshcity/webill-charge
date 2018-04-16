@@ -16,8 +16,10 @@ def sendmail(mail):
 @celery.task
 def batch_match_refund(file_id):
     app = create_app("dev")
+    app.debug_log_format = '[%(levelname)s] %(message)s'
+    app.debug = True
     with app.app_context():
         app.logger.debug('begin matching ...')
-        data_list = Refund.query.filter(Refund.file_id==file_id).all()
+        data_list = Repayment.query.filter(Repayment.file_id==file_id).all()
         for refund in data_list:
             match_by_refund(refund)

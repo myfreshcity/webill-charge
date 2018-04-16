@@ -34,6 +34,9 @@ class FileExecute:
             data_list = self.save_file_in_db(self.file_kind,datatable,file_id)
             if (self.file_kind == "refund"):
                 batch_match_refund.apply_async(args=[file_id])
+                #p = multiprocessing.Process(target=batch_match_refund, args=(file_id,))
+                #app.logger.info('process start...')
+                #p.start()
 
             return {'isSucceed':200,'message':'上传成功','file_id':file_id}
         except Exception as e:
@@ -197,7 +200,7 @@ class FileExecute:
                 'card_id': datatable['收款卡号尾号'],
             })
 
-            pdf.to_sql("t_refund", db.engine, if_exists='append', index=False, chunksize=1000)
+            pdf.to_sql("t_repayment", db.engine, if_exists='append', index=False, chunksize=1000)
             return True
         except Exception as e:
             app.logger.error(e)
