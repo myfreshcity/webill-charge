@@ -5,10 +5,23 @@ from flask_sqlalchemy import SQLAlchemy
 from config import config
 from flask_login import LoginManager
 from flask_mongoengine import MongoEngine
+from celery import Celery
 import pandas as pd
 import redis,json,datetime,time
 from pandas import DataFrame
 from flask_apscheduler import APScheduler
+
+app = Flask(__name__)
+
+app.debug_log_format = '[%(levelname)s] %(message)s'
+app.debug = True
+
+app.config['CELERY_BROKER_URL'] = 'redis://127.0.0.1:6379/0'
+app.config['CELERY_RESULT_BACKEND'] = 'redis://127.0.0.1:6379/0'
+
+celery = Celery(app.name, broker=app.config['CELERY_BROKER_URL'], include=['app.tasks'])
+celery.conf.update(app.config)
+
 
 
 bootstrap=Bootstrap()
@@ -23,15 +36,14 @@ red = redis.StrictRedis(connection_pool=pool)
 scheduler = APScheduler()
 
 def daily_quest():
-    from .main.table_data_server import ontime_refunds,ontime_commits
+    from .main.table_data_server import count_daily_delay
     print("daily_quest_start %s"%(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-    ontime_refunds()
-    ontime_commits()
+    count_daily_delay()
     print('quest has done')
 
 
 def create_app(config_name):
-    app=Flask(__name__)
+    app.logger.info('begin run application ...')
 
     app.config.from_object(config[config_name])
     config[config_name].init_app(app)
@@ -48,7 +60,5 @@ def create_app(config_name):
 
     from .auth import auth as auth_blueprint
     app.register_blueprint(auth_blueprint,url_prefix='/auth')
-
-    scheduler.start()
 
     return app
