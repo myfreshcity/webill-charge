@@ -106,7 +106,7 @@ def get_contract_detail():
     contract_id = j_data['contract_id']
     is_overtime  = j_data['is_overtime']
     execute = DataExecute()
-    result = execute.contract_detail(contract_no,is_overtime,contract_id)
+    result = execute.contract_detail(contract_no,contract_id)
     return result
 
 
@@ -152,7 +152,7 @@ def link_refund():
     result=  execute.link_refund_to_contract(contract_no,contract_id,refund_id)
     return result
 
-#协商还款审批
+#对账审核
 @main.route('/charge/commit/approve',methods=['POST'])
 @TokenTest
 def approve_commit():

@@ -89,6 +89,9 @@ class Contract(db.Model):
     is_dealt = db.Column(db.Integer,default=0)
     file_id = db.Column(db.Integer,default=0)
     create_time = db.Column(db.DateTime)
+    refund_plans = db.relationship("ContractRepay",backref='contract')
+    refund = db.relationship('Repayment', backref='contract')
+    commit = db.relationship('CommitInfo',backref='contract')
 
     def __repr__(self):
         return "<Contract %s>"%self.contract_no
@@ -156,8 +159,8 @@ class CommitInfo(db.Model):
     applyer = db.Column(db.VARCHAR(20))
     type = db.Column(db.Integer)
     discount_type = db.Column(db.Integer)
-    amount = db.Column(db.Integer)
-    remain_amt = db.Column(db.Integer)
+    amount = db.Column(db.Integer,default=0)
+    remain_amt = db.Column(db.Integer,default=0)
     deadline = db.Column(db.DateTime)
     approve_date = db.Column(db.DateTime)
     approver = db.Column(db.VARCHAR(20))
@@ -166,7 +169,7 @@ class CommitInfo(db.Model):
     is_valid = db.Column(db.Integer)
     remark = db.Column(db.TEXT)
     create_time = db.Column(db.DateTime)
-
+    plans = db.relationship('ContractRepay',backref='commit')
 
 class FundMatchLog(db.Model):
     __tablename__='t_fund_match_log'
