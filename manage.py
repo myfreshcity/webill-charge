@@ -5,6 +5,7 @@ from app import create_app, db, scheduler
 from app.models import User,Role
 from flask_script import Manager,Shell
 from flask_cors import *
+from app.main.table_data_server import DataExecute
 
 app = create_app("dev")
 CORS(app, supports_credentials=True)
@@ -17,11 +18,8 @@ manager = Manager(app, with_default_commands=False)
 def runserver(config, host, port):
     scheduler.start()
     app.run(host=host, port=port,debug=True)
-
-
 def make_shell_context():
-    return dict(app=app, db=db, User=User, Role=Role)
-
+    return dict(app=app,db=db,User=User,Role=Role,DataExecute=DataExecute)
 
 if __name__=="__main__":
     manager.run()

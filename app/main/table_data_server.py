@@ -196,7 +196,6 @@ class FileExecute:
                 'bank': datatable['收款银行'],
                 'card_id': datatable['收款卡号尾号'],
             })
-
             pdf.to_sql("t_refund", db.engine, if_exists='append', index=False, chunksize=1000)
             return True
         except Exception as e:
@@ -369,8 +368,12 @@ class DataExecute:
                                  "%Y-%m-%d") if overtime_plan.settled_date else None,
                              'fee': overtime_plan.fee,
                              'contract_no':contract_no,
-                             'actual_amt': overtime_plan.actual_amt,
-                             'actual_fee': overtime_plan.actual_fee,
+                             'actual_amt': "%.2f" % (overtime_plan.actual_amt / 100),
+                             'actual_fee': "%.2f" % (overtime_plan.actual_fee / 100),
+                             'interest': "%.2f" % (overtime_plan.interest / 100),
+                             'fee': "%.2f" % (overtime_plan.fee / 100),
+                             'actual_amt': "%.2f" % (overtime_plan.actual_amt / 100),
+                             'actual_fee': "%.2f" % (overtime_plan.actual_fee / 100),
                              'overtime_date': (now - overtime_plan.deadline).days + 1
                              }
                 settled_status = {'逾期':[0,0],'还款中':[1,0],'正常结清':[0,1],'提前结清':[1,1]}
@@ -493,12 +496,16 @@ class DataExecute:
         commit_refund.remark = commit  # 备注
         commit_refund.applyer = int(user_id)
         commit_refund.is_valid = 0  # 0、有效；-1；无效
-        if type == '0':  # 申请减免
+        if type == '1':  # 申请减免
             commit_refund.result = 0  # 0、待审核；100、通过；200、拒绝
             commit_refund.discount_type = int(discount_type)  # 减免类型
             commit_refund.amount = int(amount) * 100  # 协商金额
+            commit_refund.remain_amt = int(amount) * 100  # 协商金额
         if type == '2':  # 移交外催
+            commit_refund.result = 100  # 0、待审核；100、通过；200、拒绝
             contract.is_settled = 200  # 合同状态==》移交外催
+        if type == '0':  # 提醒还款
+            commit_refund.result = 100  # 0、待审核；100、通过；200、拒绝
 
         db.session.add(commit_refund)  # 保存协商还款信息
 
@@ -536,7 +543,7 @@ class DataExecute:
                 'commit_id':commit.id,
                 'result':commit.result,
                 'commit_amount':"%.2f"%(commit.amount/100),
-                'remark':commit.remark[:5]+'...' if commit.remark else ' ',
+                'remark':'处理备注：'+commit.remark[:5]+'...' if commit.remark else ' '+'审批意见：'+commit.approve_remark,
                 'applyer':commit.applyer
             }
             commit_list.append(commit_dic)
@@ -596,14 +603,31 @@ class DataExecute:
         return {'isSucceed':200,'message':'审批成功'}
 
     #将还款记录与合同对应冲账
-    def link_refund_to_contract(self,contract_no,refund_id):
-        contract = Contract.query.filter(Contract.contract_no == contract_no).first()
-        refund = Repayment.query.filter(Repayment.id == refund_id, Repayment.contract_id.is_(None)).first()
-        result = match_by_contract(contract,refund)
+    def link_refund_to_contract(self,contract_no,contract_id,refund_id):
+        if contract_no:
+            contract = Contract.query.filter(Contract.contract_no == contract_no).first()
+        if contract_id:
+            contract = Contract.query.filter(Contract.id == contract_id).first()
+        refund = Repayment.query.filter(Repayment.id==int(refund_id),Repayment.contract_id.is_(None)).first()
+        if not contract or not refund:
+            return {'isSucceed': 500, 'message': '未找到合同或还款流水'}
+        result = match_by_contract(contract, refund)
         if result:
             return {'isSucceed': 500, 'message': result.msg}
         else:
-            return {'isSucceed': 200, 'message': '冲账成功'}
+            return {'isSucceed': 200, 'message': '冲账成功！'}
+
+    #还款流水重新匹配
+    def refund_re_match(self,refund_id):
+        refund = Repayment.query.filter(Repayment.id==refund_id,Repayment.contract_id.is_(None)).first()
+        if not refund:
+            return {'isSucceed': 500, 'message': '未找到还款流水'}
+        from .match_engine import match_by_refund
+        result = match_by_refund(refund)
+        if result:
+            return {'isSucceed': 500, 'message': result[0].msg}
+        else:
+            return {'isSucceed': 200, 'message': '重新匹配成功！'}
 
 
     def update_contract(self,contract_no):
@@ -698,10 +722,8 @@ class DataExecute:
                 query = query.filter(Repayment.file_id == file_id)
             if refund_name:
                 query = query.filter(Repayment.refund_name == refund_name)
-            if is_match == '0':
-                query = query.filter(Repayment.contract_id.is_(None))
-            if is_match == '1':
-                query = query.filter(Repayment.contract_id != '')
+            if is_match:
+                query = query.filter(Repayment.t_status == is_match)
             if create_time:
                 start_date = DateStrToDate(create_time, 0, 0, 0)
                 end_date = DateStrToDate(create_time, 23, 59, 59)
@@ -723,7 +745,7 @@ class DataExecute:
                               'create_time': refund.create_time.strftime("%Y-%m-%d %H:%M:%S"),
                               'refund_name': refund.refund_name, 'file_id': refund.file_id,
                               'contract_id': refund.contract_id, 'card_id': refund.card_id,
-                              'refund_id': refund.id,
+                              'refund_id': refund.id,'remain_amt':refund.remain_amt,'t_status':refund.t_status,
                               'amount': "%u" % (refund.amount / 100)}
                 search_refund_list.append(refundsStr)
             result_dic = {'isSucceed': 200, 'search_refund_list': search_refund_list, 'message': '查询还款流水成功！','num':num}
@@ -745,6 +767,7 @@ class DataExecute:
             contract_dic['loan_date'] = contract.loan_date.strftime('%Y-%m-%d')
             contract_dic['id_number'] = contract.id_number
             contract_dic['tensor'] = contract.tensor
+            contract_dic['is_settled'] = contract.is_settled
             contract_dic['deal_status'] = contract.is_dealt
             contract_dic['upload_time'] = contract.create_time.strftime("%Y-%m-%d")
             now = datetime.datetime.now()

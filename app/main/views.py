@@ -119,6 +119,15 @@ def unlinked_refund():
     result=execute.get_unlinked_refund(page,customer,refund_date,range)
     return result
 
+#还款流水重新匹配
+@main.route('/charge/refund/rematch',methods=['POST'])
+@TokenTest
+def refund_re_match():
+    refund_id = request.form.get('refund_id')
+    execute = DataExecute()
+    result=  execute.refund_re_match(refund_id)
+    return result
+
 
 #修改还款信息
 @main.route('/charge/commit/create',methods=['POST'])
@@ -138,9 +147,9 @@ def create_commit():
 @main.route('/charge/refund/unlink/link',methods=['POST'])
 @TokenTest
 def link_refund():
-    contract_no,user_id,refund_id = request.form.get('contract_no'),request.form.get('user_id'),request.form.get('refund_id')
+    contract_no,user_id,refund_id,contract_id = request.form.get('contract_no'),request.form.get('user_id'),request.form.get('refund_id'),request.form.get('contract_id')
     execute = DataExecute()
-    result=  execute.link_refund_to_contract(contract_no,refund_id)
+    result=  execute.link_refund_to_contract(contract_no,contract_id,refund_id)
     return result
 
 #协商还款审批
