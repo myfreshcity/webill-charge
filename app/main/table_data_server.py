@@ -331,8 +331,16 @@ class DataExecute:
             commit.remark = commit.remark if commit.remark else ''
             commit.approve_remark = commit.approve_remark if commit.approve_remark else ''
             if commit.type==1:
-                    remark = '减免申请：%s；审批意见：%s'%(commit.remark,commit.approve_remark)
-
+                remark =''
+                if commit.remark:
+                    remark = '减免申请：%s；'%(commit.remark)
+                if  commit.approve_remark:
+                    remark = remark + '审批意见：%s' % (commit.approve_remark)
+            else:
+                if commit.remark:
+                    remark = '操作备注：'+ commit.remark
+                else:
+                    remark = ''
             comit_refund = {'type': commit.type, 'discount_type': commit.discount_type, 'remark': remark,
                             'apply_date': commit.apply_date.strftime("%Y-%m-%d"),
                             'apply_date': commit.apply_date.strftime("%Y-%m-%d %H:%M:%S"),
@@ -721,7 +729,7 @@ class DataExecute:
                 query = query.filter(Contract.id_number == id_number)
             if file_id:  # 合同文件编号
                 query = query.filter(Contract.file_id == file_id)
-            return query.order_by(Contract.create_time.desc())
+            return query.order_by(Contract.loan_date.desc())
         contracts = get_query().paginate(int(page), per_page=10, error_out=False)
         page_contracts = contracts.items
         num = contracts.total
