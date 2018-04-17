@@ -704,17 +704,6 @@ class DataExecute:
             contract_dic['deal_status'] = contract.is_dealt
             contract_dic['file_id'] = contract.file_id
             contract_dic['upload_time'] = contract.create_time.strftime("%Y-%m-%d")
-            now = datetime.datetime.now()
-            end_time = now.replace(hour=0, minute=0, second=0) + datetime.timedelta(days=1)
-
-            refund_plans = ContractRepay.query.filter(ContractRepay.contract_id == contract.id, ContractRepay.is_settled == 0,
-                                                   ContractRepay.deadline < end_time).all()
-            if refund_plans:
-                contract_dic['overtime_tensor'] = len(refund_plans)
-                contract_dic['is_settled'] = 0
-            else:
-                contract_dic['overtime_tensor'] = 0
-                contract_dic['check_status'] = 1
             return contract_dic
 
         def get_query():
