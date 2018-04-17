@@ -295,6 +295,8 @@ class DataExecute:
         contract_dic['mobile_no'] = contract.mobile_no
         contract_dic['id_number'] = contract.id_number
         contract_dic['tensor'] = contract.tensor
+        contract_dic['loan_amount'] = "%u"%(contract.loan_amount/100)
+        contract_dic['loan_date'] = contract.loan_date.strftime("%Y-%m-%d")
         contract_dic['remain_sum']= "%u"%(contract.remain_sum/100)        #冲账余额
         plans = ContractRepay.query.filter(ContractRepay.contract_id == contract.id).all()
         #还款情况
@@ -700,6 +702,7 @@ class DataExecute:
             contract_dic['tensor'] = contract.tensor
             contract_dic['is_settled'] = contract.is_settled
             contract_dic['deal_status'] = contract.is_dealt
+            contract_dic['file_id'] = contract.file_id
             contract_dic['upload_time'] = contract.create_time.strftime("%Y-%m-%d")
             now = datetime.datetime.now()
             end_time = now.replace(hour=0, minute=0, second=0) + datetime.timedelta(days=1)
