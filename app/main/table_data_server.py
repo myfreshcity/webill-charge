@@ -205,57 +205,6 @@ class FileExecute:
             app.logger.error(e)
             raise
 
-    def update_contract(self,contract_no):
-        contract = Contract.query.filter(Contract.contract_no==contract_no).first()
-        commit_plan  = CommitInfo.query.filter(CommitInfo.contract_id == contract.id, CommitInfo.is_valid == 0).first()
-        fund_plans = True
-
-        if commit_plan:#首先计算协商还款数
-            deserve_refund_sum = commit_plan.amount
-            if contract.remain_sum>=deserve_refund_sum:#如果余额比需还款的金额大,则更新
-                if commit_plan.type == 2 or commit_plan.type ==1:
-                    contract.is_settled = 1
-                    contract.is_dealt  =1
-                    db.session.add(contract)
-                    fund_plans = False
-                commit_plan.is_settled = 1
-                plans = commit_plan.plans
-                for plan in plans:#将协商还款所对应的还款期数全部冲正
-                    plan.is_settled = 1
-                    plan.settled_date=  datetime.datetime.now()
-                    db.session.add(plan)
-                db.session.add(commit_plan)
-            else:#如果不足，则需要处理
-                fund_plans = False
-        db.session.commit()
-
-        if fund_plans:#如果有未还清的协商计划，或合同被协商还款计划结清，则fund_plan==False,不对正常还款计划进行更新
-            overtime_plans = ContractRepay.query.filter(ContractRepay.contract_id == contract.id, ContractRepay.is_settled == 0, ContractRepay.deadline < datetime.datetime.now()).all()
-            if not overtime_plans:#第二步检查是否还有逾期未处理
-                now = datetime.datetime.now()
-                end_time = datetime.datetime(now.year, now.month, now.day+1, 0,0,0)
-                refund_plan = ContractRepay.query.filter(ContractRepay.contract_id == contract.id, ContractRepay.is_settled == 0, ContractRepay.deadline == end_time).first()
-                if refund_plan:#检查是否有正常还款中的期数
-                    deserve_refund_sum = 0#计算总需要还款数
-
-                    deserve_refund_sum+=refund_plan.principal
-                    deserve_refund_sum+=refund_plan.interest
-                    if contract.remain_sum>=deserve_refund_sum:#如果余额比需还款的金额大,则更新
-                        refund_plan.is_settled = 1
-                        refund_plan.settled_date = datetime.datetime.now()
-                        db.session.add(refund_plan)
-                        contract.is_dealt = 1  # 无协商还款和正常还款计划未处理
-                        contract.remain_sum-=deserve_refund_sum
-                        db.session.add(contract)
-                    else:#如果不足，则需要处理
-                        contract.is_dealt = 0
-                        db.session.add(contract)
-            else:#如果有逾期的话，也需要处理
-                contract.is_dealt = 0
-                db.session.add(contract)
-
-        db.session.commit()
-
 
 class DataExecute:
     #对账处理
@@ -346,6 +295,8 @@ class DataExecute:
         contract_dic['mobile_no'] = contract.mobile_no
         contract_dic['id_number'] = contract.id_number
         contract_dic['tensor'] = contract.tensor
+        contract_dic['loan_amount'] = "%u"%(contract.loan_amount/100)
+        contract_dic['loan_date'] = contract.loan_date.strftime("%Y-%m-%d")
         contract_dic['remain_sum']= "%u"%(contract.remain_sum/100)        #冲账余额
         plans = ContractRepay.query.filter(ContractRepay.contract_id == contract.id).all()
         #还款情况
@@ -377,14 +328,15 @@ class DataExecute:
         commit_history = []
         commits = CommitInfo.query.filter(CommitInfo.contract_id == contract.id).order_by(CommitInfo.create_time.desc()).all()
         for commit in commits:
-            if commit.type==1 and commit.result==200:
-                remark = '减免申请：%s；审批意见：%s'%(commit.remark,commit.approve_remark)
-            else:
-                remark = commit.remark
+            commit.remark = commit.remark if commit.remark else ''
+            commit.approve_remark = commit.approve_remark if commit.approve_remark else ''
+            if commit.type==1:
+                    remark = '减免申请：%s；审批意见：%s'%(commit.remark,commit.approve_remark)
+
             comit_refund = {'type': commit.type, 'discount_type': commit.discount_type, 'remark': remark,
                             'apply_date': commit.apply_date.strftime("%Y-%m-%d"),
                             'apply_date': commit.apply_date.strftime("%Y-%m-%d %H:%M:%S"),
-                            'applyer': commit.applyer, 'amount': commit.amount, 'remain_amt': commit.remain_amt,
+                            'applyer': commit.applyer, 'amount': "%u" % (commit.amount/100), 'remain_amt': commit.remain_amt,
                             'approve_date': commit.approve_date.strftime(
                                 "%Y-%m-%d %H:%M:%S") if commit.approve_date else None,
                             'result': commit.result,
@@ -397,7 +349,8 @@ class DataExecute:
             last_commit = commits[0]
             if last_commit:
                 last_amount = "%u" % (last_commit.amount / 100)
-                commit_dic = {'type': last_commit.type, 'amount': last_amount, 'remark': last_commit.remark,
+                remark = '减免申请：%s；审批意见：%s' % (last_commit.remark, last_commit.approve_remark)
+                commit_dic = {'type': last_commit.type, 'amount': last_amount, 'remark': remark,
                               'approve_remark': last_commit.approve_remark, 'result': last_commit.result,
                               'is_dealt': contract.is_dealt}
                 contract_dic['commit'] = commit_dic
@@ -408,9 +361,9 @@ class DataExecute:
         real_pays =Repayment.query.filter(Repayment.contract_id == contract.id).order_by(Repayment.refund_time.desc()).all()
         real_pay_list=[]
         for pay in real_pays:
-            real_pays = {'amount': pay.amount, 'way': pay.method,'remain_amt':pay.remain_amt,
+            real_pays = {'way': pay.method,'remain_amt':"%u" % (pay.remain_amt/100),
                          'refund_time': pay.refund_time.strftime("%Y-%m-%d %H:%M:%S"),
-                         'refund_name': pay.refund_name, 'amount': pay.amount}
+                         'refund_name': pay.refund_name, 'amount': "%u" % (pay.amount/100)}
             real_pay_list.append(real_pays)
         contract_dic['real_pays']=real_pay_list
         return  contract_dic
@@ -435,23 +388,22 @@ class DataExecute:
         if not customer:
             customer = "%"
 
-        unlinked_refunds = Repayment.query.filter(Repayment.contract_id.is_(None),
+        unlinked_refunds = Repayment.query.filter(Repayment.remain_amt >0,
                                                   Repayment.create_time.between(start_date, end_date),
                                                   Repayment.amount.between(min_sum, max_sum),
-                                                  Repayment.refund_name.like(customer)).all()
-        if unlinked_refunds:
-            num = len(unlinked_refunds)
-            unlinked_refunds=self.get_by_page(lists=unlinked_refunds,page=page)
-            unlinked_list = []
-            for unlinked_refund in unlinked_refunds:
-                unlinked_dic = {'refund_date': unlinked_refund.refund_time.strftime("%Y-%m-%d"),
-                                'refund_time': unlinked_refund.refund_time.strftime('%H:%M:%S'),
-                                'refund_name': unlinked_refund.refund_name, 'card_id': unlinked_refund.card_id,
-                                'amount': "%u" % (unlinked_refund.amount / 100),
-                                'type': unlinked_refund.method, 'refund_id': unlinked_refund.id}
-                unlinked_list.append(unlinked_dic)
-            return {'isSucceed':200,'num':num,'unlinked_list':unlinked_list}
-        return {'isSucceed':200,'unlinked_list':[]}
+                                                  Repayment.refund_name.like(customer)).paginate(int(page), per_page=10, error_out=False)
+        page_refunds = unlinked_refunds.items
+        num = unlinked_refunds.total
+        unlinked_list = []
+        for unlinked_refund in page_refunds:
+            unlinked_dic = {'refund_date': unlinked_refund.refund_time.strftime("%Y-%m-%d"),
+                            'refund_time': unlinked_refund.refund_time.strftime('%H:%M:%S'),
+                            'refund_name': unlinked_refund.refund_name, 'card_id': unlinked_refund.card_id,
+                            'amount': "%u" % (unlinked_refund.amount / 100),
+                            'remain_amt': "%u" % (unlinked_refund.remain_amt / 100),
+                            'type': unlinked_refund.method, 'refund_id': unlinked_refund.id}
+            unlinked_list.append(unlinked_dic)
+        return {'isSucceed':200,'num':num,'unlinked_list':unlinked_list}
 
 
     #修改还款信息
@@ -543,7 +495,7 @@ class DataExecute:
             plan_dict = {'amount': "%u"%(overtime_amount/100),
                          'tensor': overtime_plan.tensor,
                          'settled_date': overtime_plan.settled_date.strftime(
-                             "%Y-%m-%d") if overtime_plan.settled_date else None,
+                             "%Y-%m-%d") if overtime_plan.refund_name else None,
                          }
             overtime_list.append(plan_dict)
         commit_dict = {'isSucceed': 200, 'contract_no': contract.contract_no, 'customer': contract.customer,
@@ -692,7 +644,7 @@ class DataExecute:
             result_dic = {'isSucceed': 500, 'refund_list': '', 'message': '查询各门店最新支付时间失败！'}
         return result_dic
     #还款流水查询
-    def search_refund(self,file_id=None,is_match=None,refund_name=None,create_time=None,page='1'):
+    def search_refund(self,file_id=None,is_match=None,refund_name=None,refund_time=None,page='1'):
         def get_query():
             query = Repayment.query
             if file_id:
@@ -701,15 +653,15 @@ class DataExecute:
                 query = query.filter(Repayment.refund_name == refund_name)
             if is_match:
                 query = query.filter(Repayment.t_status == is_match)
-            if create_time:
-                start_date = DateStrToDate(create_time, 0, 0, 0)
-                end_date = DateStrToDate(create_time, 23, 59, 59)
-                query = query.filter(Repayment.create_time.between(start_date, end_date))
+            if refund_time:
+                start_date = DateStrToDate(refund_time, 0, 0, 0)
+                end_date = DateStrToDate(refund_time, 23, 59, 59)
+                query = query.filter(Repayment.refund_time.between(start_date, end_date))
             else:
                 start_date = datetime.datetime(1990, 1, 1)
                 end_date = datetime.datetime.now()
-                query = query.filter(Repayment.create_time.between(start_date, end_date))
-            return query.order_by(Repayment.create_time.desc())
+                query = query.filter(Repayment.refund_time.between(start_date, end_date))
+            return query.order_by(Repayment.create_time.desc(),Repayment.refund_time.desc())
 
         pagination = get_query().paginate(int(page), per_page=10, error_out=False)
         page_refunds = pagination.items
@@ -721,8 +673,9 @@ class DataExecute:
                 refundsStr = {'way': refund.method, 'refundTime': refund.refund_time.strftime("%Y-%m-%d %H:%M:%S"),
                               'create_time': refund.create_time.strftime("%Y-%m-%d %H:%M:%S"),
                               'refund_name': refund.refund_name, 'file_id': refund.file_id,
+                              'remain_amt': "%u" % (refund.remain_amt / 100),
                               'contract_id': refund.contract_id, 'card_id': refund.card_id,
-                              'refund_id': refund.id,'remain_amt':refund.remain_amt,'t_status':refund.t_status,
+                              'refund_id': refund.id, 't_status': refund.t_status,
                               'amount': "%u" % (refund.amount / 100)}
                 search_refund_list.append(refundsStr)
             result_dic = {'isSucceed': 200, 'search_refund_list': search_refund_list, 'message': '查询还款流水成功！','num':num}
@@ -735,7 +688,10 @@ class DataExecute:
         return match_by_refund(refund)
 
     # 对账处理/贷款列表
-    def get_deal_refund(self,contract_no=None,customer=None,check_date=None,check_status=None,page=None,id_number=None):
+    def get_deal_refund(self,contract_no=None,customer=None,check_date=None,is_dealt=None,is_settled=None,page=None,id_number=None,file_id=None):
+        def convert(limit):
+            if limit:return '%'+limit+'%'
+            else: return "%"
         def contruct_contract_dict(contract):
             contract_dic = {}
             contract_dic['contract_no'] = contract.contract_no
@@ -746,6 +702,7 @@ class DataExecute:
             contract_dic['tensor'] = contract.tensor
             contract_dic['is_settled'] = contract.is_settled
             contract_dic['deal_status'] = contract.is_dealt
+            contract_dic['file_id'] = contract.file_id
             contract_dic['upload_time'] = contract.create_time.strftime("%Y-%m-%d")
             now = datetime.datetime.now()
             end_time = now.replace(hour=0, minute=0, second=0) + datetime.timedelta(days=1)
@@ -763,13 +720,17 @@ class DataExecute:
         def get_query():
             query = Contract.query
             if contract_no:  # 合同编号
-                query = query.filter(Contract.contract_no == contract_no)
+                query = query.filter(Contract.contract_no.like(convert(contract_no)))
             if customer:  # 客户名字
-                query = query.filter(Contract.customer == customer)
-            if check_status:  # 1为已处理，0为未处理
-                query = query.filter(Contract.is_dealt == check_status)
+                query = query.filter(Contract.customer.like(convert(customer)))
+            if is_dealt:  # 1为已处理，0为未处理
+                query = query.filter(Contract.is_dealt == is_dealt)
+            if is_settled:  # 0、还款中；100、逾期；200、移交外催；300、结清)
+                query = query.filter(Contract.is_settled == is_settled)
             if id_number:  # 证件号码
                 query = query.filter(Contract.id_number == id_number)
+            if file_id:  # 合同文件编号
+                query = query.filter(Contract.file_id == file_id)
             return query.order_by(Contract.create_time.desc())
         contracts = get_query().paginate(int(page), per_page=10, error_out=False)
         page_contracts = contracts.items
