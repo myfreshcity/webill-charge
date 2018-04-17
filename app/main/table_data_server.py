@@ -331,8 +331,16 @@ class DataExecute:
             commit.remark = commit.remark if commit.remark else ''
             commit.approve_remark = commit.approve_remark if commit.approve_remark else ''
             if commit.type==1:
-                    remark = '减免申请：%s；审批意见：%s'%(commit.remark,commit.approve_remark)
-
+                remark =''
+                if commit.remark:
+                    remark = '减免申请：%s；'%(commit.remark)
+                if  commit.approve_remark:
+                    remark = remark + '审批意见：%s' % (commit.approve_remark)
+            else:
+                if commit.remark:
+                    remark = '操作备注：'+ commit.remark
+                else:
+                    remark = ''
             comit_refund = {'type': commit.type, 'discount_type': commit.discount_type, 'remark': remark,
                             'apply_date': commit.apply_date.strftime("%Y-%m-%d"),
                             'apply_date': commit.apply_date.strftime("%Y-%m-%d %H:%M:%S"),
@@ -363,6 +371,7 @@ class DataExecute:
         for pay in real_pays:
             real_pays = {'way': pay.method,'remain_amt':"%u" % (pay.remain_amt/100),
                          'refund_time': pay.refund_time.strftime("%Y-%m-%d %H:%M:%S"),
+                         'create_time': pay.create_time.strftime("%Y-%m-%d %H:%M:%S"),
                          'refund_name': pay.refund_name, 'amount': "%u" % (pay.amount/100)}
             real_pay_list.append(real_pays)
         contract_dic['real_pays']=real_pay_list
@@ -704,17 +713,6 @@ class DataExecute:
             contract_dic['deal_status'] = contract.is_dealt
             contract_dic['file_id'] = contract.file_id
             contract_dic['upload_time'] = contract.create_time.strftime("%Y-%m-%d")
-            now = datetime.datetime.now()
-            end_time = now.replace(hour=0, minute=0, second=0) + datetime.timedelta(days=1)
-
-            refund_plans = ContractRepay.query.filter(ContractRepay.contract_id == contract.id, ContractRepay.is_settled == 0,
-                                                   ContractRepay.deadline < end_time).all()
-            if refund_plans:
-                contract_dic['overtime_tensor'] = len(refund_plans)
-                contract_dic['is_settled'] = 0
-            else:
-                contract_dic['overtime_tensor'] = 0
-                contract_dic['check_status'] = 1
             return contract_dic
 
         def get_query():
@@ -731,7 +729,7 @@ class DataExecute:
                 query = query.filter(Contract.id_number == id_number)
             if file_id:  # 合同文件编号
                 query = query.filter(Contract.file_id == file_id)
-            return query.order_by(Contract.create_time.desc())
+            return query.order_by(Contract.loan_date.desc())
         contracts = get_query().paginate(int(page), per_page=10, error_out=False)
         page_contracts = contracts.items
         num = contracts.total
