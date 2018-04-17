@@ -91,9 +91,11 @@ def get_contract_deal():
     contract_no=request.form.get('contract_no')
     check_date=request.form.get('check_date')
     id_number=request.form.get('id_number')
-    check_status=request.form.get('check_status')
+    is_dealt=request.form.get('is_dealt')   #1为已处理，0为未处理
+    is_settled=request.form.get('is_settled')   #合同状态是否(0、还款中；100、逾期；200、移交外催；300、结清)
+    file_id=request.form.get('file_id')
     execute = DataExecute()
-    result=execute.get_deal_refund(contract_no,customer,check_date,check_status,page,id_number)
+    result=execute.get_deal_refund(contract_no,customer,check_date,is_dealt,is_settled,page,id_number,file_id)
     return result
 
 #获取合同详细信息(对账详情，上半部分)
@@ -195,11 +197,10 @@ def search_refund():
     file_id = request.form.get('file_id')
     is_match = request.form.get('is_match')
     refund_name = request.form.get('refund_name')
-    create_time = request.form.get('create_time')
+    refund_time = request.form.get('refund_time')
     page = request.form.get('page')
     execute = DataExecute()
-    result=execute.search_refund(file_id,is_match,refund_name,create_time,page)
-    print(result)
+    result=execute.search_refund(file_id,is_match,refund_name,refund_time,page)
     return jsonify(result)
 
 @main.route('/test',methods=['POST','GET'])
