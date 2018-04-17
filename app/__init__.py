@@ -1,3 +1,4 @@
+import flask
 from flask import Flask
 from flask_bootstrap import Bootstrap
 from flask_moment import Moment
@@ -19,14 +20,45 @@ app.debug = True
 app.config['CELERY_BROKER_URL'] = 'redis://127.0.0.1:6379/0'
 app.config['CELERY_RESULT_BACKEND'] = 'redis://127.0.0.1:6379/0'
 
-celery = Celery(app.name, broker=app.config['CELERY_BROKER_URL'], include=['app.tasks'])
-celery.conf.update(app.config)
 
+class FlaskCelery(Celery):
+    def __init__(self, *args, **kwargs):
+        super(FlaskCelery, self).__init__(*args, **kwargs)
+        self.patch_task()
+
+        if 'app' in kwargs:
+            self.init_app(kwargs['app'])
+
+    def patch_task(self):
+        TaskBase = self.Task
+        _celery = self
+
+        class ContextTask(TaskBase):
+            abstract = True
+
+            def __call__(self, *args, **kwargs):
+                if flask.has_app_context():
+                    return TaskBase.__call__(self, *args, **kwargs)
+                else:
+                    with _celery.app.app_context():
+                        return TaskBase.__call__(self, *args, **kwargs)
+
+        self.Task = ContextTask
+
+    def init_app(self, app):
+        self.app = app
+        self.config_from_object(app.config)
+
+celery = FlaskCelery(app.name, broker=app.config['CELERY_BROKER_URL'], include=['app.tasks'])
+app.config.from_object(config['dev'])
+config['dev'].init_app(app)
+celery.init_app(app)
 
 
 bootstrap=Bootstrap()
 moment=Moment()
 db=SQLAlchemy()
+db.init_app(app)
 login_manager=LoginManager()
 mdb = MongoEngine()
 login_manager.session_protection = 'strong'
@@ -45,20 +77,22 @@ def daily_quest():
 def create_app(config_name):
     app.logger.info('begin run application ...')
 
-    app.config.from_object(config[config_name])
-    config[config_name].init_app(app)
+
 
     bootstrap.init_app(app)
     moment.init_app(app)
-    db.init_app(app)
+
+
     login_manager.init_app(app)
     mdb.init_app(app)
     scheduler.init_app(app)
+    return app
 
+def register_blueprints(app):
     from .main import main as main_blueprint
     app.register_blueprint(main_blueprint)
 
     from .auth import auth as auth_blueprint
-    app.register_blueprint(auth_blueprint,url_prefix='/auth')
+    app.register_blueprint(auth_blueprint, url_prefix='/auth')
 
-    return app
+

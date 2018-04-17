@@ -199,7 +199,6 @@ def search_refund():
     page = request.form.get('page')
     execute = DataExecute()
     result=execute.search_refund(file_id,is_match,refund_name,create_time,page)
-    print(result)
     return jsonify(result)
 
 @main.route('/test',methods=['POST','GET'])

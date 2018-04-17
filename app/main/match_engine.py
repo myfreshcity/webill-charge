@@ -92,6 +92,13 @@ def get_reduce_plan(contract, refund):
     else:
         return None
 
+def do_check_commit_amt(reduce_amt,tplans):
+    i = 0
+    for plan in tplans:
+        offV = plan.amt + plan.fee - plan.actual_amt - plan.actual_fee
+        i += offV
+    return True if reduce_amt >= i else False
+
 
 # 按照还款情况单笔冲账
 def do_contract_refund(contract, tplans, refund=None, commit_plan=None):
@@ -101,27 +108,30 @@ def do_contract_refund(contract, tplans, refund=None, commit_plan=None):
 
     # 结清状态计算
     v = 0
+    flag = True
     if commit_plan:
         v += commit_plan.remain_amt
         app.logger.info('从减免计划[%s]获得减免额[%s]使用给贷款合同[%s]', commit_plan.id,commit_plan.remain_amt, contract.id)
+        flag = do_check_commit_amt(v, tplans)  # 减免额是否足够
 
-    for plan in tplans:
-        offV = plan.amt + plan.fee - plan.actual_amt - plan.actual_fee
-        if v - offV >= 0:
-            plan.is_settled = 1
-            app.logger.info('还款计划[%s]已结清', plan.id)
-            if commit_plan:
-                commit_plan.remain_amt -= offV
-                add_match_log(3, contract.id, plan.id, commit_plan.id,
-                              offV, commit_plan.remain_amt,
-                              0, '使用减免')
-            v -= offV
-        else:
-            if commit_plan:
-                if commit_plan.remain_amt>0:
-                    commit_plan.remain_amt = 0
-                    app.logger.warn('使用减免计划[%s]减免还款计划[%s]至少需要额度%s,额度不足', commit_plan.id,plan.id,offV)
-            break
+    if flag:
+        for plan in tplans:
+            offV = plan.amt + plan.fee - plan.actual_amt - plan.actual_fee
+            if v - offV >= 0:
+                plan.is_settled = 1
+                app.logger.info('还款计划[%s]已结清', plan.id)
+                if commit_plan:
+                    commit_plan.remain_amt -= offV
+                    add_match_log(3, contract.id, plan.id, commit_plan.id,
+                                  offV, commit_plan.remain_amt,
+                                  0, '使用减免')
+                v -= offV
+            else:
+                if commit_plan:
+                    if commit_plan.remain_amt>0:
+                        commit_plan.remain_amt = 0
+                        app.logger.warn('使用减免计划[%s]减免还款计划[%s]至少需要额度%s,额度不足', commit_plan.id,plan.id,offV)
+                break
 
     # 同步合同状态
     if not get_refund_plan(contract.id, 0):
@@ -142,12 +152,15 @@ def get_refund_plan(contract_id, flag):
     tplans = ContractRepay.query.filter(ContractRepay.contract_id == contract_id,
                                      ContractRepay.is_settled == 0)
 
-    if flag == 1:  # 逾期
-        tplans = tplans.filter(ContractRepay.deadline < datetime.datetime.now())
-    if flag == 2:  # 未到期
-        tplans = tplans.filter(ContractRepay.deadline >= datetime.datetime.now())
+    now =  datetime.datetime.now()
+    end_time = now.replace(hour=0, minute=0, second=0)
 
-    tplans = tplans.order_by(ContractRepay.deadline.desc()).all()
+    if flag == 1:  # 逾期
+        tplans = tplans.filter(ContractRepay.deadline < end_time)
+    if flag == 2:  # 未到期
+        tplans = tplans.filter(ContractRepay.deadline >= end_time)
+
+    tplans = tplans.order_by(ContractRepay.deadline.asc()).all()
     return tplans
 
 # 是否一次结清

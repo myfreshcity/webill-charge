@@ -1,5 +1,7 @@
 from celery import Celery
 from celery.schedules import crontab
+from flask import Flask, config
+from flask_sqlalchemy import SQLAlchemy
 
 from app import celery, app, create_app
 from app.main.match_engine import match_by_refund
@@ -15,11 +17,9 @@ def sendmail(mail):
 
 @celery.task
 def batch_match_refund(file_id):
-    app = create_app("dev")
     app.debug_log_format = '[%(levelname)s] %(message)s'
     app.debug = True
-    with app.app_context():
-        app.logger.debug('begin matching ...')
-        data_list = Repayment.query.filter(Repayment.file_id==file_id).all()
-        for refund in data_list:
-            match_by_refund(refund)
+    app.logger.debug('begin matching ...')
+    data_list = Repayment.query.filter(Repayment.file_id==file_id).order_by(Repayment.refund_time.asc()).all()
+    for refund in data_list:
+        match_by_refund(refund)
