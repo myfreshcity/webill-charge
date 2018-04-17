@@ -363,6 +363,7 @@ class DataExecute:
         for pay in real_pays:
             real_pays = {'way': pay.method,'remain_amt':"%u" % (pay.remain_amt/100),
                          'refund_time': pay.refund_time.strftime("%Y-%m-%d %H:%M:%S"),
+                         'create_time': pay.create_time.strftime("%Y-%m-%d %H:%M:%S"),
                          'refund_name': pay.refund_name, 'amount': "%u" % (pay.amount/100)}
             real_pay_list.append(real_pays)
         contract_dic['real_pays']=real_pay_list
