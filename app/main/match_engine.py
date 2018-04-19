@@ -155,7 +155,7 @@ def check_close(commit_plan):
 
 # 指定合同冲账 prePay:余额是否按照提前还款冲账
 def match_by_contract(contract, refund=None, prePay=True):
-
+    app.logger.info('---合同[%s] 冲账开始---', contract.id)
     # 已结清的合同不应再重复处理
     if contract.is_settled == 300:
         app.logger.info('贷款合同[%s]已结清，略过', contract.id)
@@ -191,9 +191,12 @@ def match_by_contract(contract, refund=None, prePay=True):
     if refund:
         refund.t_status = 1 if refund.contract_id else 2
 
+    app.logger.info('---合同[%s] 冲账结束---', contract.id)
+
 
 # 指定还款流水冲账
 def match_by_refund(refund):
+    app.logger.info('---还款流水[%s] 冲账开始---', refund.id)
     # 根据姓名寻找待还款的合同
     # 移交外催的合同不自动处理，但可人工冲账
     contracts = Contract.query.filter(Contract.customer == refund.refund_name,
@@ -236,7 +239,11 @@ def match_by_refund(refund):
                             break
     else:
         app.logger.warning('还款流水[%s] 没有找到可冲账合同', refund.id)
+        refund.t_status = 2
+        db.session.commit()
         return {'code': 5006, 'msg': '还款流水[%s] 没有找到可冲账合同' % (refund.id)}
+
+    app.logger.info('---还款流水[%s] 冲账结束---', refund.id)
 
 
 

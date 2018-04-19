@@ -29,7 +29,7 @@ pip install -r requirements.txt
    jupyter notebook
 
 Celery 启动命令
-   celery -A app.celery worker --loglevel=info
+   venv/bin/celery -A app.celery worker --loglevel=info
 
 生产环境：
 该项目目前在window7生产环境下运行，使用Apache启动
