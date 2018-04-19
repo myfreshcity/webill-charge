@@ -2,17 +2,14 @@
 # -*- coding: UTF-8 -*-
 import multiprocessing
 import traceback
-
 import pandas as pd
 import xlrd
 import os,datetime,re
-
-from app.tasks import *
-
-from app.main.match_engine import countFee, match_by_refund, match_by_contract
+from app.main.match_engine import match_by_refund, match_by_contract
+from app.main.utils import countFee
 from ..models import *
 from sqlalchemy import and_
-from .back_server import DateStrToDate
+from .utils import DateStrToDate
 from .. import db, app, celery
 
 
@@ -24,6 +21,7 @@ class FileExecute:
         self.file_dir = config['dev'].UPLOAD_FOLD
 
     def execute_file(self):
+        from app.tasks import batch_match_refund
         try:
             result = self.rectify(self.file_kind)
             if result['result'] != True:
@@ -155,7 +153,10 @@ class FileExecute:
                         refund_plan = ContractRepay()
                         refund_plan.contract_id = contract.id
                         refund_plan.file_id = file_id
-                        refund_plan.deadline = pd.Timestamp(deadline).to_pydatetime()+datetime.timedelta(days=1)
+                        refund_plan.deadline = datetime.datetime.utcfromtimestamp(deadline.tolist()/1e9)
+                        if not contract.repay_date:
+                            contract.repay_date = refund_plan.deadline
+
                         refund_plan.tensor = i+1
                         refund_plan.interest = 0
                         refund_plan.principal = int(amount * 100)  # 应还本金（单位：分/人民币）
@@ -177,7 +178,7 @@ class FileExecute:
 
     # 保存实际还款流水
     def save_refund(self, datatable, file_id):
-        from .back_server import TimeString
+        from .utils import TimeString
         try:
             def getRefundTime(x):
                 pay_date_str = datatable[datatable.index == x].get('支付日期').values[0]
@@ -222,7 +223,7 @@ class DataExecute:
             contract_dic['id_number'] = contract.id_number
             contract_dic['tensor'] = contract.tensor
             contract_dic['deal_status'] = contract.is_dealt
-            contract_dic['upload_time'] = contract.create_time.strftime("%Y-%m-%d")
+            contract_dic['upload_time'] = contract.create_timed.strftime("%Y-%m-%d")
             now = datetime.datetime.now()
             end_time = now.replace(hour=0, minute=0, second=0) + datetime.timedelta(days=1)
 
@@ -697,7 +698,7 @@ class DataExecute:
         return match_by_refund(refund)
 
     # 对账处理/贷款列表
-    def get_deal_refund(self,contract_no=None,customer=None,check_date=None,is_dealt=None,is_settled=None,page=None,id_number=None,file_id=None):
+    def get_deal_refund(self,contract_no=None,customer=None,repay_date=None,is_dealt=None,is_settled=None,page=None,id_number=None,file_id=None):
         def convert(limit):
             if limit:return '%'+limit+'%'
             else: return "%"
@@ -707,12 +708,16 @@ class DataExecute:
             contract_dic['customer'] = contract.customer
             contract_dic['loan_amount'] = "%u" % (contract.loan_amount / 100)
             contract_dic['loan_date'] = contract.loan_date.strftime('%Y-%m-%d')
+            delay_days = None
+            if contract.repay_date:
+                delay_days = (datetime.datetime.now().date() - contract.repay_date).days
+            contract_dic['delay_days'] = delay_days
             contract_dic['id_number'] = contract.id_number
             contract_dic['tensor'] = contract.tensor
             contract_dic['is_settled'] = contract.is_settled
             contract_dic['deal_status'] = contract.is_dealt
             contract_dic['file_id'] = contract.file_id
-            contract_dic['upload_time'] = contract.create_time.strftime("%Y-%m-%d")
+            contract_dic['upload_time'] = contract.created_time.strftime("%Y-%m-%d")
             return contract_dic
 
         def get_query():
@@ -729,6 +734,8 @@ class DataExecute:
                 query = query.filter(Contract.id_number == id_number)
             if file_id:  # 合同文件编号
                 query = query.filter(Contract.file_id == file_id)
+            if repay_date:
+                query = query.filter(Contract.repay_date <= repay_date)
             return query.order_by(Contract.loan_date.desc())
         contracts = get_query().paginate(int(page), per_page=10, error_out=False)
         page_contracts = contracts.items
@@ -739,21 +746,4 @@ class DataExecute:
         result = {'isSucceed': 200, 'message': '', 'contract_list': contract_list, 'num': num}
         db.session.commit()
         return result
-
-#计算每日逾期费用
-def count_daily_delay():
-    from .sqlhelper import get_delay_refund,update_plan_fee
-    refunds = get_delay_refund()
-    if refunds:
-        for refund in refunds:
-            pid = refund['id']
-            contract_id = refund['contract_id']
-            contract = Contract.query.filter(Contract.id == contract_id).first()
-            contractAmt = contract.contract_amount #合同额
-            now = datetime.datetime.now()
-            delayDay = (now-refund['deadline']).days #逾期天数
-            fee = countFee(contractAmt,delayDay)
-
-            update_plan_fee(fee,delayDay, pid)
-            #update_contract(is_dealt=0,is_settled=0,contract_id=contract_id)
 

@@ -52,4 +52,9 @@ def TimeString(time_string):
     else:
         return None
 
-
+# 滞纳金算法
+def countFee(contractAmt, delayDay):
+    if contractAmt >= 10000 * 100:
+        return delayDay * 400 * 100
+    else:
+        return delayDay * 200 * 100

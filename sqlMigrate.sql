@@ -1,3 +1,12 @@
+
+--20180418--
+update t_contract set delayed_day=null;
+ALTER TABLE `t_contract` CHANGE COLUMN `delayed_day` `repay_date` date DEFAULT NULL COMMENT '最近还款日',
+ADD COLUMN `updated_time` timestamp NOT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新日期' AFTER `file_id`,
+ CHANGE COLUMN `create_time` `created_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建日期' AFTER `updated_time`;
+
+
+
 ALTER TABLE `t_commit_refund`
 MODIFY COLUMN `deadline`  datetime NULL COMMENT '截止日期' AFTER `amount`;
 

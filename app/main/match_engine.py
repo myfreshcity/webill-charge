@@ -1,4 +1,6 @@
-from app import app, celery
+from app import app
+from app.main.db_service import get_reduce_plan, get_refund_plan, add_match_log
+from app.main.utils import countFee
 from app.models import *
 
 
@@ -77,20 +79,7 @@ def get_fee(plan, refund, contract):
     return (delayDay, fee)
 
 
-# 获取有效减免审批建议
-def get_reduce_plan(contract, refund):
-    commit_plan = CommitInfo.query.filter(CommitInfo.contract_id == contract.id,
-                                          CommitInfo.type == 1,
-                                          CommitInfo.result == 100
-                                          ).order_by(CommitInfo.apply_date.desc()).first()
-    if commit_plan:
-        # 如果存款时间在申请当天，审批额度则有效
-        deadline_time = commit_plan.apply_date.replace(hour=23, minute=59, second=59)
-        fund_time = refund.refund_time if refund else commit_plan.apply_date  # 如果是事后减免取申请时间
-        if fund_time < deadline_time and commit_plan.remain_amt > 0:
-            return commit_plan
-    else:
-        return None
+
 
 def do_check_commit_amt(reduce_amt,tplans):
     i = 0
@@ -136,32 +125,24 @@ def do_contract_refund(contract, tplans, refund=None, commit_plan=None):
     # 同步合同状态
     if not get_refund_plan(contract.id, 0):
         contract.is_settled = 300  # 设置初始状态为结清
+        contract.repay_date = None
         app.logger.info('贷款合同[%s]已结清', contract.id)
 
     if contract.is_settled == 0 or contract.is_settled == 100:
-        if get_refund_plan(contract.id, 1):
+        plans = get_refund_plan(contract.id, 1)
+        if plans:
+            contract.repay_date = plans[0].deadline
             contract.is_settled = 100  # 设置为逾期状态
-        elif get_refund_plan(contract.id, 2):
-            contract.is_settled = 0  # 设置初始状态为还款中
+        else:
+            plans2 = get_refund_plan(contract.id, 2)
+            if plans2:
+                contract.repay_date = plans2[0].deadline
+                contract.is_settled = 0  # 设置初始状态为还款中
 
     db.session.commit()
 
 
-# 获取未还清还款计划 0:全部 1:仅逾期 2:仅未到期
-def get_refund_plan(contract_id, flag):
-    tplans = ContractRepay.query.filter(ContractRepay.contract_id == contract_id,
-                                     ContractRepay.is_settled == 0)
 
-    now =  datetime.datetime.now()
-    end_time = now.replace(hour=0, minute=0, second=0)
-
-    if flag == 1:  # 逾期
-        tplans = tplans.filter(ContractRepay.deadline < end_time)
-    if flag == 2:  # 未到期
-        tplans = tplans.filter(ContractRepay.deadline >= end_time)
-
-    tplans = tplans.order_by(ContractRepay.deadline.asc()).all()
-    return tplans
 
 # 是否一次结清
 def check_close(commit_plan):
@@ -267,23 +248,7 @@ def check_exam_contract(contract):
                                           ).all()
     return commit_plan
 
-# 增加对账日志
-def add_match_log(m_type,contract_id,plan_id,fund_id,amt=0,f_remain_amt=0,p_remain_amt=0,remark=None):
-    log = FundMatchLog()
-    log.match_type = m_type
-    log.contract_id = contract_id
-    log.fund_id = fund_id
-    log.plan_id = plan_id
-    log.amount = amt
-    log.f_remain_amt = f_remain_amt
-    log.p_remain_amt = p_remain_amt
-    log.remark = remark
-    db.session.add(log)
 
-# 滞纳金算法
-def countFee(contractAmt, delayDay):
-    if contractAmt >= 10000 * 100:
-        return delayDay * 200 * 100
-    else:
-        return delayDay * 100 * 100
+
+
 

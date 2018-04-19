@@ -43,19 +43,19 @@ class AlchemyEncoder(json.JSONEncoder):
 def main():
 
     # 准备环境
-    # set_cond_001()  # 单期逾期
-    # set_cond_002()  # 多期逾期
+    #set_cond_001()  # 单期逾期
+    set_cond_002()  # 多期逾期
 
-    #reduce_001()  # 清欠
-    # reduce_002()  # 结清
+    reduce_001()  # 清欠
+    #reduce_002()  # 结清
     #db.session.commit()
 
     # 对账设置
-    # repayment_001()  # 导入冲账
-    # repayment_002()  # 指定冲账
+    #repayment_001()  # 导入冲账
+    repayment_002()  # 指定冲账
     #repayment_003()  # 还款后冲账
 
-    query_info()
+    #query_info()
 
 
 
@@ -70,8 +70,8 @@ def repayment_001():
 
 #指定流水冲账
 def repayment_002():
-    refund = Repayment.query.filter(Repayment.id == '104').first()
-    refund.remain_amt = 5000
+    refund = Repayment.query.filter(Repayment.id == '103').first()
+    refund.remain_amt = 63000
     refund.refund_time = datetime.datetime.now() - datetime.timedelta(days=1)
     contract = Contract.query.filter(Contract.id == '25').first()
     result = match_by_contract(contract,refund)
@@ -89,9 +89,9 @@ def repayment_003():
 #单期逾期
 def set_cond_001():
     contract = Contract.query.filter(Contract.id == '25').first()
-    plan = RefundPlan.query.filter(RefundPlan.id == '49').first()
-    plan2 = RefundPlan.query.filter(RefundPlan.id == '50').first()
-    plan3 = RefundPlan.query.filter(RefundPlan.id == '51').first()
+    plan = ContractRepay.query.filter(ContractRepay.id == '49').first()
+    plan2 = ContractRepay.query.filter(ContractRepay.id == '50').first()
+    plan3 = ContractRepay.query.filter(ContractRepay.id == '51').first()
 
     # 重置合同状态
     contract.is_settled = 0
@@ -103,7 +103,7 @@ def set_cond_001():
     plan.deadline = datetime.datetime.now() - datetime.timedelta(days=4)
     plan.amt = 5000
     plan.fee = 40000
-    plan.delay_day = 4
+    plan.delay_day = 2
     plan.actual_amt = 0
     plan.actual_fee = 0
 
@@ -125,9 +125,9 @@ def set_cond_001():
 # 多期逾期包含减免
 def set_cond_002():
     contract = Contract.query.filter(Contract.id == '25').first()
-    plan = RefundPlan.query.filter(RefundPlan.id == '49').first()
-    plan2 = RefundPlan.query.filter(RefundPlan.id == '50').first()
-    plan3 = RefundPlan.query.filter(RefundPlan.id == '51').first()
+    plan = ContractRepay.query.filter(ContractRepay.id == '49').first()
+    plan2 = ContractRepay.query.filter(ContractRepay.id == '50').first()
+    plan3 = ContractRepay.query.filter(ContractRepay.id == '51').first()
 
     # 重置合同状态
     contract.is_settled = 0
@@ -139,14 +139,14 @@ def set_cond_002():
     plan.deadline = datetime.datetime.now() - datetime.timedelta(days=4)
     plan.amt = 5000
     plan.fee = 40000
-    plan.delay_day = 4
+    plan.delay_day = 2
     plan.actual_amt = 0
     plan.actual_fee = 0
 
     plan2.deadline = datetime.datetime.now() - datetime.timedelta(days=2)
     plan2.amt = 5000
     plan2.fee = 20000
-    plan2.delay_day = 2
+    plan2.delay_day = 1
     plan2.actual_amt = 0
     plan2.actual_fee = 0
 
@@ -159,14 +159,14 @@ def set_cond_002():
 
 # 清欠
 def reduce_001():
-    cRefund = CommitRefund.query.filter(CommitRefund.id == '21').first()
-    cRefund.remain_amt = 22000
+    cRefund = CommitInfo.query.filter(CommitInfo.id == '21').first()
+    cRefund.remain_amt = 30000
     cRefund.discount_type = 0
     cRefund.apply_date = datetime.datetime.now()
 
 #结清
 def reduce_002():
-    cRefund = CommitRefund.query.filter(CommitRefund.id == '21').first()
+    cRefund = CommitInfo.query.filter(CommitInfo.id == '21').first()
     cRefund.remain_amt = 12000
     cRefund.discount_type = 1
     cRefund.apply_date = datetime.datetime.now()
@@ -175,9 +175,9 @@ def reduce_002():
 
 def query_info():
     contract = Contract.query.filter(Contract.id == '25').first()
-    plan = RefundPlan.query.filter(RefundPlan.id == '49').first()
-    plan2 = RefundPlan.query.filter(RefundPlan.id == '50').first()
-    plan3 = RefundPlan.query.filter(RefundPlan.id == '51').first()
+    plan = ContractRepay.query.filter(ContractRepay.id == '49').first()
+    plan2 = ContractRepay.query.filter(ContractRepay.id == '50').first()
+    plan3 = ContractRepay.query.filter(ContractRepay.id == '51').first()
     refund = Repayment.query.filter(Repayment.id == '103').first()
 
     #app.logger.info('contract:%s',json.dumps(contract, cls=AlchemyEncoder))

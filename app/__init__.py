@@ -1,5 +1,5 @@
-import flask
-from flask import Flask
+import flask, logging
+from flask import Flask, current_app
 from flask_bootstrap import Bootstrap
 from flask_moment import Moment
 from flask_sqlalchemy import SQLAlchemy
@@ -14,11 +14,8 @@ from flask_apscheduler import APScheduler
 
 app = Flask(__name__)
 
-app.debug_log_format = '[%(levelname)s] %(message)s'
-app.debug = True
-
-app.config['CELERY_BROKER_URL'] = 'redis://127.0.0.1:6379/0'
-app.config['CELERY_RESULT_BACKEND'] = 'redis://127.0.0.1:6379/0'
+#app.config['CELERY_BROKER_URL'] = 'redis://127.0.0.1:6379/0'
+#app.config['CELERY_RESULT_BACKEND'] = 'redis://127.0.0.1:6379/0'
 
 
 class FlaskCelery(Celery):
@@ -49,9 +46,9 @@ class FlaskCelery(Celery):
         self.app = app
         self.config_from_object(app.config)
 
-celery = FlaskCelery(app.name, broker=app.config['CELERY_BROKER_URL'], include=['app.tasks'])
 app.config.from_object(config['dev'])
 config['dev'].init_app(app)
+celery = FlaskCelery(app.name, broker=app.config['CELERY_BROKER_URL'], include=['app.tasks'])
 celery.init_app(app)
 
 
@@ -68,21 +65,26 @@ red = redis.StrictRedis(connection_pool=pool)
 scheduler = APScheduler()
 
 def daily_quest():
-    from .main.table_data_server import count_daily_delay
+    from .main.db_service import count_daily_delay
     print("daily_quest_start %s"%(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
     count_daily_delay()
     print('quest has done')
 
 
 def create_app(config_name):
+    config = app.config
+    handler = logging.handlers.RotatingFileHandler(config.get('LOG_FILENAME'),
+                                                   maxBytes=config.get('LOG_FILESIZE'),
+                                                   backupCount=20, encoding='UTF-8')
+    handler.setLevel(logging.DEBUG)
+    logging_format = logging.Formatter(
+        '%(asctime)s - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)s - %(message)s')
+    handler.setFormatter(logging_format)
+    app.logger.addHandler(handler)
+
     app.logger.info('begin run application ...')
-
-
-
     bootstrap.init_app(app)
     moment.init_app(app)
-
-
     login_manager.init_app(app)
     mdb.init_app(app)
     scheduler.init_app(app)

@@ -80,7 +80,7 @@ class Contract(db.Model):
     id_number = db.Column(db.VARCHAR(20),default='')
     shop = db.Column(db.VARCHAR(20),default='')
     tensor = db.Column(db.Integer,default=0)
-    delayed_day = db.Column(db.Integer,default=0)
+    repay_date = db.Column(db.DateTime)
     contract_amount = db.Column(db.Integer,default=0)
     loan_amount = db.Column(db.Integer,default=0)
     loan_date = db.Column(db.DateTime)
@@ -89,10 +89,12 @@ class Contract(db.Model):
     is_settled = db.Column(db.Integer,default=0)
     is_dealt = db.Column(db.Integer,default=0)
     file_id = db.Column(db.Integer,default=0)
-    create_time = db.Column(db.DateTime)
+
     refund_plans = db.relationship("ContractRepay",backref='contract')
     refund = db.relationship('Repayment', backref='contract')
     commit = db.relationship('CommitInfo',backref='contract')
+    updated_time = db.Column(db.DateTime)
+    created_time = db.Column(db.DateTime,default=datetime.datetime.now())
 
     def __repr__(self):
         return "<Contract %s>"%self.contract_no
