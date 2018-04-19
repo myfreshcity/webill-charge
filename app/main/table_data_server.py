@@ -283,11 +283,11 @@ class DataExecute:
         return result
 
     #合同表详情---------------------------------------------------------------------------------------------------------
-    def contract_detail(self,contract_no,contract_id=None):
+    def contract_detail(self,contract_id=None):
         if contract_id:
             contract = Contract.query.filter(Contract.id == contract_id).first()
-        elif contract_no:
-            contract = Contract.query.filter(Contract.contract_no==contract_no).first()
+        else:
+            return {'isSucceed': 505, 'message': 'contract_id不能为空'}
         if not contract:
             return {'isSucceed':500,'message':'未查询到合同'}
         contract_dic = {}
@@ -312,7 +312,7 @@ class DataExecute:
                          'settled_date': plan.settled_date.strftime(
                              "%Y-%m-%d") if plan.settled_date else None,
                          'fee': plan.fee,
-                         'contract_no':contract_no,
+                         'contract_no':contract.contract_no,
                          'actual_amt': "%u" % (plan.actual_amt / 100),
                          'actual_fee': "%u" % (plan.actual_fee / 100),
                          'interest': "%u" % (plan.interest / 100),
@@ -543,13 +543,16 @@ class DataExecute:
 
     #将还款记录与合同对应冲账
     def link_refund_to_contract(self,contract_no,contract_id,refund_id):
+        contract = None
         if contract_no:
             contract = Contract.query.filter(Contract.contract_no == contract_no).first()
+
         if contract_id:
             contract = Contract.query.filter(Contract.id == contract_id).first()
-        refund = Repayment.query.filter(Repayment.id==int(refund_id),Repayment.contract_id.is_(None)).first()
-        if not contract or not refund:
-            return {'isSucceed': 500, 'message': '未找到合同或还款流水'}
+        refund = Repayment.query.filter(Repayment.id==int(refund_id)).first()
+        if  not refund:
+            return {'isSucceed': 500, 'message': '未找到有效流水'}
+
         result = match_by_contract(contract, refund)
         if result:
             return {'isSucceed': 500, 'message': result.msg}
@@ -705,6 +708,7 @@ class DataExecute:
         def contruct_contract_dict(contract):
             contract_dic = {}
             contract_dic['contract_no'] = contract.contract_no
+            contract_dic['contract_id'] = contract.id
             contract_dic['customer'] = contract.customer
             contract_dic['loan_amount'] = "%u" % (contract.loan_amount / 100)
             contract_dic['loan_date'] = contract.loan_date.strftime('%Y-%m-%d')
@@ -735,7 +739,7 @@ class DataExecute:
                 query = query.filter(Contract.id_number == id_number)
             if file_id:  # 合同文件编号
                 query = query.filter(Contract.file_id == file_id)
-            if repay_date:
+            if repay_date and repay_date!='null':
                 query = query.filter(Contract.repay_date <= repay_date)
             return query.order_by(Contract.loan_date.desc())
         contracts = get_query().paginate(int(page), per_page=10, error_out=False)

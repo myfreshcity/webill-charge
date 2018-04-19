@@ -104,11 +104,9 @@ def get_contract_deal():
 def get_contract_detail():
     data = request.get_data()
     j_data = json.loads(data.decode())
-    contract_no = j_data['contract_no']
     contract_id = j_data['contract_id']
-    is_overtime  = j_data['is_overtime']
     execute = DataExecute()
-    result = execute.contract_detail(contract_no,contract_id)
+    result = execute.contract_detail(contract_id)
     return result
 
 
