@@ -718,6 +718,7 @@ class DataExecute:
             contract_dic['deal_status'] = contract.is_dealt
             contract_dic['file_id'] = contract.file_id
             contract_dic['upload_time'] = contract.created_time.strftime("%Y-%m-%d")
+            contract_dic['loan_date'] = contract.loan_date.strftime("%Y-%m-%d")
             return contract_dic
 
         def get_query():
