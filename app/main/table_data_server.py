@@ -750,6 +750,5 @@ class DataExecute:
         for contract in page_contracts:
             contract_list.append(contruct_contract_dict(contract))
         result = {'isSucceed': 200, 'message': '', 'contract_list': contract_list, 'num': num}
-        db.session.commit()
         return result
 
