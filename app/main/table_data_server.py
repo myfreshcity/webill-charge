@@ -711,6 +711,7 @@ class DataExecute:
             contract_dic['contract_id'] = contract.id
             contract_dic['customer'] = contract.customer
             contract_dic['loan_amount'] = "%u" % (contract.loan_amount / 100)
+            contract_dic['contract_amount'] = "%u" % (contract.contract_amount / 100)
             contract_dic['loan_date'] = contract.loan_date.strftime('%Y-%m-%d')
             delay_days = None
             if contract.repay_date:
