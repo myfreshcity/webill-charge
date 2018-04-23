@@ -741,7 +741,7 @@ class DataExecute:
                 query = query.filter(Contract.file_id == file_id)
             if repay_date and repay_date!='null':
                 query = query.filter(Contract.repay_date <= repay_date)
-            return query.order_by(Contract.loan_date.desc())
+            return query.order_by(Contract.loan_date.desc(),Contract.contract_no.desc())
         contracts = get_query().paginate(int(page), per_page=10, error_out=False)
         page_contracts = contracts.items
         num = contracts.total
