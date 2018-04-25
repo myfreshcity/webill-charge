@@ -58,30 +58,17 @@ def balance_fee(plan,refund,contract):
 
 # 重新计算滞纳金
 def recount_fee(plan, refund, contract):
-    (delayDay, fee) = get_fee(plan, refund, contract)
-    if refund.remain_amt > 0 :
-        if delayDay > 0 and delayDay != plan.delay_day:
-            app.logger.info('还款流水[%s]因导入时间和实际还款时间的不一致，调整还款计划[%s]逾期天数:%s，滞纳金:%s,为逾期天数:%s，滞纳金:%s',
-                            refund.id, plan.id, plan.delay_day, plan.fee, delayDay,fee)
-            plan.fee = fee
-            plan.delay_day = delayDay
-
-
-
-# 获取最新的滞纳金
-def get_fee(plan, refund, contract):
-    delayDay = 0
-    fee = 0
     if plan.actual_amt >= plan.amt:  # 仅对还清本息的还款计划有效
-        delayDay = (refund.refund_time.date()-plan.deadline.date()).days  # 逾期天数
-        if delayDay > 0:
-            fee = countFee(contract.contract_amount, delayDay)
-    return (delayDay, fee)
+        n_delay_day = (refund.refund_time.date()-plan.deadline.date()).days  # 逾期天数
+        if n_delay_day != plan.delay_day:
+            fee = countFee(contract.contract_amount, n_delay_day)
+            app.logger.info('还款流水[%s]因导入时间和实际还款时间的不一致，调整还款计划[%s]逾期天数:%s，滞纳金:%s,为逾期天数:%s，滞纳金:%s',
+                            refund.id, plan.id, plan.delay_day, plan.fee, n_delay_day,fee)
+            plan.fee = max(0, fee)  # 提前还款的直接归零
+            plan.delay_day = max(0, n_delay_day)  # 提前还款的直接归零
 
 
-
-
-def do_check_commit_amt(reduce_amt,tplans):
+def do_check_commit_amt(reduce_amt, tplans):
     i = 0
     for plan in tplans:
         offV = plan.amt + plan.fee - plan.actual_amt - plan.actual_fee
