@@ -131,15 +131,15 @@ def do_contract_refund(contract, tplans, refund=None, commit_plan=None):
     if contract.is_settled == 0 or contract.is_settled == 100:
         plans = get_refund_plan(contract.id, 1)
         if plans:
-            contract.repay_date = plans[0].deadline
+            contract.repay_date = plans[0].deadline.date()
             contract.is_settled = 100  # 设置为逾期状态
         else:
             plans2 = get_refund_plan(contract.id, 2)
             if plans2:
-                contract.repay_date = plans2[0].deadline
+                contract.repay_date = plans2[0].deadline.date()
                 contract.is_settled = 0  # 设置初始状态为还款中
 
-    db.session.commit()
+
 
 
 
@@ -191,6 +191,7 @@ def match_by_contract(contract, refund=None, prePay=True):
     if refund:
         refund.t_status = 1 if refund.contract_id else 2
 
+    db.session.commit()
     app.logger.info('---合同[%s] 冲账结束---', contract.id)
 
 
