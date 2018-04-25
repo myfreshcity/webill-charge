@@ -296,6 +296,7 @@ class DataExecute:
         contract_dic['mobile_no'] = contract.mobile_no
         contract_dic['id_number'] = contract.id_number
         contract_dic['tensor'] = contract.tensor
+        contract_dic['contract_amount'] = "%u"%(contract.contract_amount/100)
         contract_dic['loan_amount'] = "%u"%(contract.loan_amount/100)
         contract_dic['loan_date'] = contract.loan_date.strftime("%Y-%m-%d")
         contract_dic['remain_sum']= "%u"%(contract.remain_sum/100)        #冲账余额
