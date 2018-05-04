@@ -53,9 +53,10 @@ def add_match_log(m_type,contract_id,plan_id,fund_id,amt=0,f_remain_amt=0,p_rema
     log.remark = remark
     db.session.add(log)
 
-#计算每日逾期费用
+# 计算每日逾期费用
 def count_daily_delay():
     with app.app_context():
+        app.logger.info('---每日逾期费用计算开始---')
         plans = get_refund_plan(None,1)
         if plans:
             for plan in plans:
@@ -68,5 +69,8 @@ def count_daily_delay():
 
                 plan.fee = fee
                 plan.delay_day = delayDay
-                #update_contract(is_dealt=0,is_settled=0,contract_id=contract_id)
+                if contract.is_settled == 0: # 排除已移交外催的合同
+                    contract.is_settled = 100  # 设置为逾期状态
+
+                app.logger.info('---还款计划[%s] 计算结束---', plan.id)
         db.session.commit()
