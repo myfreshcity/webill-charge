@@ -30,7 +30,7 @@ def get_refund_plan(contract_id, flag):
         tplans = tplans.filter(ContractRepay.contract_id == contract_id)
 
     now =  datetime.datetime.now()
-    end_time = now.replace(hour=0, minute=0, second=0)
+    end_time = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
     if flag == 1:  # 逾期
         tplans = tplans.filter(ContractRepay.deadline < end_time)

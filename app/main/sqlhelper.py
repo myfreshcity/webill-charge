@@ -58,7 +58,7 @@ def Insert(func):
 @SearchAll
 def get_delay_refund():
     now = datetime.datetime.now()
-    start_time = now.replace(hour=0,minute=1,second=0)
+    start_time = now.replace(hour=0,minute=1,second=0, microsecond=0)
     #已还清本息的贷款不再计算滞纳金
     sql = "SELECT id,contract_id,deadline from t_contract_repay WHERE is_settled=0 and actual_amt >= amt and deadline < %s"
     param = (start_time,)
@@ -69,7 +69,7 @@ def get_delay_refund():
 @SearchAll
 def ontime_refund():
     now = datetime.datetime.now()
-    start_time = now.replace(hour=0,minute=1,second=0)
+    start_time = now.replace(hour=0,minute=1,second=0, microsecond=0)
     end_time = start_time+datetime.timedelta(days=1)
     sql = "SELECT * from t_contract_repay WHERE is_settled=0 and deadline BETWEEN %s and %s"
     param = (start_time,end_time)
@@ -91,7 +91,7 @@ def update_contract(is_dealt,is_settled,contract_id):
 @SearchAll
 def ontime_commit():
     now = datetime.datetime.now()
-    end_time = now.replace(hour=0,minute=0,second=0)+datetime.timedelta(days=1)
+    end_time = now.replace(hour=0,minute=0,second=0, microsecond=0)+datetime.timedelta(days=1)
     sql="select * from t_commit_refund where is_valid=0 and deadline<=%s"
     param  = (end_time,)
     return sql,param

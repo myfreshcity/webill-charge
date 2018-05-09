@@ -225,7 +225,7 @@ class DataExecute:
             contract_dic['deal_status'] = contract.is_dealt
             contract_dic['upload_time'] = contract.create_timed.strftime("%Y-%m-%d")
             now = datetime.datetime.now()
-            end_time = now.replace(hour=0, minute=0, second=0) + datetime.timedelta(days=1)
+            end_time = now.replace(hour=0, minute=0, second=0, microsecond=0) + datetime.timedelta(days=1)
 
             refund_plans=ContractRepay.query.filter(ContractRepay.contract_id == contract.id, ContractRepay.is_settled == 0, ContractRepay.deadline < end_time).all()
             if refund_plans:
@@ -252,7 +252,7 @@ class DataExecute:
         if int(all) ==0:#如果是获取未处理列表
             contracts_list = []
             now = datetime.datetime.now()
-            end_time = now.replace(hour=0, minute=0, second=0) + datetime.timedelta(days=1)
+            end_time = now.replace(hour=0, minute=0, second=0, microsecond=0) + datetime.timedelta(days=1)
             for contract in contracts:
                 overtime_plans = ContractRepay.query.filter(ContractRepay.contract_id == contract.id,
                                                          ContractRepay.is_settled == 0,
@@ -307,12 +307,18 @@ class DataExecute:
         for plan in plans:
             overtime_amount = plan.principal+plan.interest
             overtime_sum +=overtime_amount
+
+            now = datetime.datetime.now()
+            delayDay = (now.date() - plan.deadline.date()).days  # 逾期天数
+            fee = countFee(contract.contract_amount, delayDay)
+
+
             plan_dict = {'deadline': plan.deadline.strftime("%Y-%m-%d"),
                          'amount': "%u" % (overtime_amount / 100),
                          'tensor': plan.tensor,
                          'settled_date': plan.settled_date.strftime(
                              "%Y-%m-%d") if plan.settled_date else None,
-                         'fee': plan.fee,
+                         'fee': fee,
                          'contract_no':contract.contract_no,
                          'actual_amt': "%u" % (plan.actual_amt / 100),
                          'actual_fee': "%u" % (plan.actual_fee / 100),
@@ -321,7 +327,7 @@ class DataExecute:
                          'actual_amt': "%u" % (plan.actual_amt / 100),
                          'actual_fee': "%u" % (plan.actual_fee / 100),
                          'is_settled': plan.is_settled,
-                         'delay_day': plan.delay_day
+                         'delay_day': delayDay
                          }
             overtime_list.append(plan_dict)
         contract_dic['overtime_list'] = overtime_list
