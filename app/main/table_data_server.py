@@ -317,12 +317,11 @@ class DataExecute:
                          'tensor': plan.tensor,
                          'settled_date': plan.settled_date.strftime(
                              "%Y-%m-%d") if plan.settled_date else None,
-                         'fee': fee,
                          'contract_no':contract.contract_no,
                          'actual_amt': "%u" % (plan.actual_amt / 100),
                          'actual_fee': "%u" % (plan.actual_fee / 100),
                          'interest': "%u" % (plan.interest / 100),
-                         'fee': "%u" % (plan.fee / 100),
+                         'fee': "%u" % (fee / 100),
                          'actual_amt': "%u" % (plan.actual_amt / 100),
                          'actual_fee': "%u" % (plan.actual_fee / 100),
                          'is_settled': plan.is_settled,
