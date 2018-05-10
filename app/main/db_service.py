@@ -3,7 +3,7 @@ import datetime
 from flask import current_app
 
 from app import db, app
-from app.main.utils import countFee
+from app.main.utils import countFee, countDelayDay
 from app.models import CommitInfo, ContractRepay, FundMatchLog, Contract
 
 
@@ -63,13 +63,12 @@ def count_daily_delay():
                 contract_id = plan.contract_id
                 contract = Contract.query.filter(Contract.id == contract_id).first()
                 contractAmt = contract.contract_amount #合同额
-                now = datetime.datetime.now()
-                delayDay = (now.date()-plan.deadline.date()).days #逾期天数
+                delayDay = countDelayDay(plan) #逾期天数
                 fee = countFee(contractAmt,delayDay)
 
                 plan.fee = fee
                 plan.delay_day = delayDay
-                if contract.is_settled == 0: # 排除已移交外催的合同
+                if contract.is_settled == 0 and fee > 0: # 排除已移交外催的合同
                     contract.is_settled = 100  # 设置为逾期状态
 
                 app.logger.info('---还款计划[%s] 计算结束---', plan.id)

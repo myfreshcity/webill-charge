@@ -58,3 +58,18 @@ def countFee(contractAmt, delayDay):
         return delayDay * 400 * 100
     else:
         return delayDay * 200 * 100
+
+# 逾期天数算法
+def countDelayDay(plan):
+    # 如果本息结清，截止本息结清日，否则截止到今天
+    end_time = datetime.datetime.now()
+    if plan.settled_date and plan.actual_amt >= plan.amt:
+        end_time = plan.settled_date
+
+    days = (end_time.date() - plan.deadline.date()).days
+    return max(0, days)  # 提前还款处理
+
+
+class MyExpection(Exception):
+    def __init__(self, msg):
+        self.message = msg

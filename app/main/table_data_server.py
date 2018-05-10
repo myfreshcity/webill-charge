@@ -6,7 +6,7 @@ import pandas as pd
 import xlrd
 import os,datetime,re
 from app.main.match_engine import match_by_refund, match_by_contract
-from app.main.utils import countFee
+from app.main.utils import countFee, countDelayDay
 from ..models import *
 from sqlalchemy import and_
 from .utils import DateStrToDate
@@ -308,8 +308,7 @@ class DataExecute:
             overtime_amount = plan.principal+plan.interest
             overtime_sum +=overtime_amount
 
-            now = datetime.datetime.now()
-            delayDay = (now.date() - plan.deadline.date()).days  # 逾期天数
+            delayDay = countDelayDay(plan)  # 逾期天数
             fee = countFee(contract.contract_amount, delayDay)
 
 
@@ -574,7 +573,7 @@ class DataExecute:
         from .match_engine import match_by_refund
         result = match_by_refund(refund)
         if result:
-            return {'isSucceed': 500, 'message': result[0].msg}
+            return {'isSucceed': 500, 'message': result.msg}
         else:
             return {'isSucceed': 200, 'message': '重新匹配成功！'}
 
