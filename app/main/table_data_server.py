@@ -762,10 +762,12 @@ class DataExecute:
                 query = query.filter(Contract.file_id == query_form.file_id)
             if query_form.from_yu_day:
                 f_date = now - datetime.timedelta(days=int(query_form.from_yu_day))
-                query = query.filter(Contract.repay_date >= f_date)
+                ff_date = DateStrToDate(f_date.strftime("%Y-%m-%d"), 23, 59, 59)
+                query = query.filter(Contract.repay_date <= ff_date)
             if query_form.to_yu_day:
                 t_date = now - datetime.timedelta(days=int(query_form.to_yu_day))
-                query = query.filter(Contract.repay_date <= t_date)
+                tt_date = DateStrToDate(t_date.strftime("%Y-%m-%d"), 0, 0, 0)
+                query = query.filter(Contract.repay_date >= tt_date)
 
 
             if query_form.repay_date and query_form.repay_date!='null':
