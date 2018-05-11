@@ -88,6 +88,7 @@ def get_contract():
 def get_contract_deal():
     page = request.form.get('page')
     customer=request.form.get('customer')
+    shop = request.form.get('shop')
     contract_no=request.form.get('contract_no')
     repay_date=request.form.get('repay_date')
     id_number=request.form.get('id_number')
@@ -95,7 +96,7 @@ def get_contract_deal():
     is_settled=request.form.get('is_settled')   #合同状态是否(0、还款中；100、逾期；200、移交外催；300、结清)
     file_id=request.form.get('file_id')
     execute = DataExecute()
-    result=execute.get_deal_refund(contract_no,customer,repay_date,is_dealt,is_settled,page,id_number,file_id)
+    result=execute.get_deal_refund(contract_no,customer,shop,repay_date,is_dealt,is_settled,page,id_number,file_id)
     return result
 
 #获取合同详细信息(对账详情，上半部分)
@@ -166,8 +167,9 @@ def approve_commit():
 @TokenTest
 def get_commit():
     applyer,customer,page = request.form.get('applyer'),request.form.get('customer'),request.form.get('page')
+    shop = request.form.get('shop')
     execute = DataExecute()
-    result = execute.get_commits(applyer=applyer,customer=customer,page=page)
+    result = execute.get_commits(applyer=applyer,customer=customer,shop=shop,page=page)
     return result
 
 #协商还款详情
@@ -194,11 +196,12 @@ def get_newest_date():
 def search_refund():
     file_id = request.form.get('file_id')
     is_match = request.form.get('is_match')
+    shop = request.form.get('shop')
     refund_name = request.form.get('refund_name')
     refund_time = request.form.get('refund_time')
     page = request.form.get('page')
     execute = DataExecute()
-    result=execute.search_refund(file_id,is_match,refund_name,refund_time,page)
+    result=execute.search_refund(file_id,is_match,refund_name,refund_time,shop,page)
     return jsonify(result)
 
 @main.route('/test',methods=['POST','GET'])

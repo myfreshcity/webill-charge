@@ -19,15 +19,16 @@ class FileExecute:
         self.file = file
         self.file_kind = kind
         self.file_dir = config['dev'].UPLOAD_FOLD
+        self.filename = None
 
     def execute_file(self):
         from app.tasks import batch_match_refund
         try:
+            file_id = self.save_file()
             result = self.rectify(self.file_kind)
             if result['result'] != True:
                 return {'issucceed':500,'message': result['message']}
 
-            file_id = self.save_file()
             datatable = result['datatable']
             data_list = self.save_file_in_db(self.file_kind,datatable,file_id)
             if (self.file_kind == "refund"):
@@ -54,7 +55,7 @@ class FileExecute:
     #还款流水模板验证
     def rectify_refund(self):
         try:
-            datatable = pd.read_excel(self.file)
+            datatable = pd.read_excel(self.filename)
             columns = list(datatable.columns)
             real_columns = ['支付日期', '支付时间', '客户姓名', '金额', '所在门店','渠道','收款卡号尾号','收款银行']
 
@@ -71,7 +72,7 @@ class FileExecute:
     #还款计划模板验证
     def rectify_refund_plan(self):
         try:
-            datatable = pd.read_excel(self.file)
+            datatable = pd.read_excel(self.filename)
             # 查看表头是否正确
             columns = list(datatable.columns)
 
@@ -90,11 +91,20 @@ class FileExecute:
 
     #保存文件
     def save_file(self):
-        import time
-        file_kind = {'plan':0,'refund':1}
-        filename  = self.file.filename[:-4]+str(int(time.time()*1000))+'.xls'
-        file_dir = os.path.join(self.file_dir,filename)
-        self.file.save(file_dir)
+        import time, copy
+
+        file_kind = {'plan': 0, 'refund': 1}
+        file_dir = os.path.join(self.file_dir)
+        os.chdir(file_dir)
+        t = time.strftime('%Y%m%d')
+        if not os.path.exists(t):
+            os.mkdir(t)
+
+        cat = 'P' if self.file_kind == 'plan' else 'R'
+        filename = '%s/%s_%u_%s' % (t, cat, int(time.time() * 1000), self.file.filename)
+        self.filename = os.path.join(self.file_dir, filename)
+
+        self.file.save(self.filename)
 
         upload_file = UploadFile()
         upload_file.file_name = filename
@@ -104,8 +114,7 @@ class FileExecute:
         db.session.add(upload_file)
         db.session.commit()
 
-        file = UploadFile.query.filter(UploadFile.file_name==filename).first()
-        return file.id
+        return upload_file.id
 
 
     #将文件信息保存到数据库中
@@ -184,7 +193,7 @@ class FileExecute:
                 pay_date_str = datatable[datatable.index == x].get('支付日期').values[0]
                 pay_time_str = datatable[datatable.index == x].get('支付时间').values[0]
                 pay_date = pd.to_datetime(pay_date_str)
-                if pay_time_str:
+                if pay_time_str == pay_time_str: # float nan判断
                     time = TimeString(pay_time_str)  # 支持匹配正则匹配时分和时分秒
                     pay_date = pay_date.replace(hour=int(time[0]), minute=int(time[1]), second=int(time[2]))
                 return pay_date
@@ -195,6 +204,7 @@ class FileExecute:
                 'refund_name': datatable['客户姓名'],
                 'refund_time': datatable['index'].apply(getRefundTime),
                 'method': datatable['渠道'],
+                'shop': datatable['所在门店'],
                 'amount': datatable['金额']*100,
                 'remain_amt': datatable['金额']*100,
                 'bank': datatable['收款银行'],
@@ -662,7 +672,7 @@ class DataExecute:
             result_dic = {'isSucceed': 500, 'refund_list': '', 'message': '查询各门店最新支付时间失败！'}
         return result_dic
     #还款流水查询
-    def search_refund(self,file_id=None,is_match=None,refund_name=None,refund_time=None,page='1'):
+    def search_refund(self,file_id=None,is_match=None,refund_name=None,refund_time=None,shop=None,page='1'):
         def get_query():
             query = Repayment.query
             if file_id:
@@ -671,6 +681,8 @@ class DataExecute:
                 query = query.filter(Repayment.refund_name == refund_name)
             if is_match:
                 query = query.filter(Repayment.t_status == is_match)
+            if shop:  # 门店
+                query = query.filter(Repayment.shop.like(shop))
             if refund_time:
                 start_date = DateStrToDate(refund_time, 0, 0, 0)
                 end_date = DateStrToDate(refund_time, 23, 59, 59)
@@ -690,7 +702,7 @@ class DataExecute:
             for refund in page_refunds:
                 refundsStr = {'way': refund.method, 'refundTime': refund.refund_time.strftime("%Y-%m-%d %H:%M:%S"),
                               'create_time': refund.create_time.strftime("%Y-%m-%d %H:%M:%S"),
-                              'refund_name': refund.refund_name, 'file_id': refund.file_id,
+                              'refund_name': refund.refund_name, 'file_id': refund.file_id,'shop': refund.shop,
                               'remain_amt': "%u" % (refund.remain_amt / 100),
                               'contract_id': refund.contract_id, 'card_id': refund.card_id,
                               'refund_id': refund.id, 't_status': refund.t_status,
@@ -706,12 +718,13 @@ class DataExecute:
         return match_by_refund(refund)
 
     # 对账处理/贷款列表
-    def get_deal_refund(self,contract_no=None,customer=None,repay_date=None,is_dealt=None,is_settled=None,page=None,id_number=None,file_id=None):
+    def get_deal_refund(self,contract_no=None,customer=None,shop=None,repay_date=None,is_dealt=None,is_settled=None,page=None,id_number=None,file_id=None):
         def convert(limit):
             if limit:return '%'+limit+'%'
             else: return "%"
         def contruct_contract_dict(contract):
             contract_dic = {}
+            contract_dic['shop'] = contract.shop
             contract_dic['contract_no'] = contract.contract_no
             contract_dic['contract_id'] = contract.id
             contract_dic['customer'] = contract.customer
@@ -737,6 +750,8 @@ class DataExecute:
                 query = query.filter(Contract.contract_no.like(convert(contract_no)))
             if customer:  # 客户名字
                 query = query.filter(Contract.customer.like(convert(customer)))
+            if shop:  # 门店
+                query = query.filter(Contract.shop.like(convert(shop)))
             if is_dealt:  # 1为已处理，0为未处理
                 query = query.filter(Contract.is_dealt == is_dealt)
             if is_settled:  # 0、还款中；100、逾期；200、移交外催；300、结清)

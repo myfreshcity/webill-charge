@@ -143,6 +143,7 @@ class Repayment(db.Model):
     refund_name = db.Column(db.VARCHAR(20))
     refund_time = db.Column(db.DateTime)
     method = db.Column(db.VARCHAR(20))
+    shop = db.Column(db.VARCHAR(20))
     amount = db.Column(db.Integer)
     remain_amt = db.Column(db.Integer)
     bank = db.Column(db.VARCHAR(30))
