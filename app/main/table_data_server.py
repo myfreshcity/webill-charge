@@ -6,7 +6,7 @@ import pandas as pd
 import xlrd
 import os,datetime,re
 from app.main.match_engine import match_by_refund, match_by_contract
-from app.main.utils import countFee, countDelayDay
+from app.main.utils import countFee, countDelayDay, convert
 from ..models import *
 from sqlalchemy import and_
 from .utils import DateStrToDate
@@ -464,20 +464,20 @@ class DataExecute:
 
         return {'isSucceed':200,'message':'创建完成'}
 
-    #获取协商还款列表--对账审核
-    def get_commits(self,customer=None,applyer=None,page=1):
-        if not[customer,applyer,page]:
-            return {'isSucceed':500,',message':'参数错误'}
-        research_dict = {'customer':customer,'applyer':applyer}
-        for limit in research_dict:
-            if research_dict[limit]!='':pass
-            else:research_dict[limit]='%'
+    # 获取协商还款列表--对账审核
+    def get_commits(self, customer=None, applyer=None, shop=None, page=1):
 
-        commits = CommitInfo.query.outerjoin(Contract).filter(Contract.customer.like(research_dict['customer']),
-                                                              CommitInfo.applyer.like(research_dict['applyer']),
-                                                              CommitInfo.is_valid == 0, CommitInfo.result == 0,
-                                                              CommitInfo.type == 1).order_by(
-            CommitInfo.create_time.desc()).paginate(int(page), per_page=10, error_out=False)
+        query = CommitInfo.query.outerjoin(Contract).filter(CommitInfo.is_valid == 0,
+                                                            CommitInfo.result == 0,
+                                                            CommitInfo.type == 1)
+        if customer:
+            query = query.filter(Contract.customer.like(customer))
+        if applyer:
+            query = query.filter(CommitInfo.applyer.like(applyer))
+        if shop:
+            query = query.filter(Contract.shop.like(shop))
+
+        commits = query.order_by(CommitInfo.create_time.desc()).paginate(int(page), per_page=10, error_out=False)
 
         page_commits = commits.items
         num = commits.total
@@ -492,6 +492,7 @@ class DataExecute:
             commit_dic = {
                 'contract_no':contract.contract_no,
                 'customer':contract.customer,
+                'shop': contract.shop,
                 'overtime_num':len(refunds),
                 'commit_id':commit.id,
                 'result':commit.result,
@@ -500,7 +501,6 @@ class DataExecute:
                 'applyer':commit.applyer
             }
             commit_list.append(commit_dic)
-        db.session.commit()
         return {'isSucceed':200,'commit_list':commit_list,'num':num}
 
     #获取协商还款详情
@@ -718,10 +718,8 @@ class DataExecute:
         return match_by_refund(refund)
 
     # 对账处理/贷款列表
-    def get_deal_refund(self,contract_no=None,customer=None,shop=None,repay_date=None,is_dealt=None,is_settled=None,page=None,id_number=None,file_id=None):
-        def convert(limit):
-            if limit:return '%'+limit+'%'
-            else: return "%"
+    def get_deal_refund(self,query_form):
+
         def contruct_contract_dict(contract):
             contract_dic = {}
             contract_dic['shop'] = contract.shop
@@ -745,25 +743,36 @@ class DataExecute:
             return contract_dic
 
         def get_query():
+            now = datetime.datetime.now().replace(hour=0,minute=1,second=0, microsecond=0)
+
             query = Contract.query
-            if contract_no:  # 合同编号
-                query = query.filter(Contract.contract_no.like(convert(contract_no)))
-            if customer:  # 客户名字
-                query = query.filter(Contract.customer.like(convert(customer)))
-            if shop:  # 门店
-                query = query.filter(Contract.shop.like(convert(shop)))
-            if is_dealt:  # 1为已处理，0为未处理
-                query = query.filter(Contract.is_dealt == is_dealt)
-            if is_settled:  # 0、还款中；100、逾期；200、移交外催；300、结清)
-                query = query.filter(Contract.is_settled == is_settled)
-            if id_number:  # 证件号码
-                query = query.filter(Contract.id_number == id_number)
-            if file_id:  # 合同文件编号
-                query = query.filter(Contract.file_id == file_id)
-            if repay_date and repay_date!='null':
-                query = query.filter(Contract.repay_date <= repay_date)
+            if query_form.contract_no:  # 合同编号
+                query = query.filter(Contract.contract_no.like(convert(query_form.contract_no)))
+            if query_form.customer:  # 客户名字
+                query = query.filter(Contract.customer.like(convert(query_form.customer)))
+            if query_form.shop:  # 门店
+                query = query.filter(Contract.shop.like(convert(query_form.shop)))
+            if query_form.is_dealt:  # 1为已处理，0为未处理
+                query = query.filter(Contract.is_dealt == query_form.is_dealt)
+            if query_form.is_settled:  # 0、还款中；100、逾期；200、移交外催；300、结清)
+                query = query.filter(Contract.is_settled == query_form.is_settled)
+            if query_form.id_number:  # 证件号码
+                query = query.filter(Contract.id_number == query_form.id_number)
+            if query_form.file_id:  # 合同文件编号
+                query = query.filter(Contract.file_id == query_form.file_id)
+            if query_form.from_yu_day:
+                f_date = now - datetime.timedelta(days=int(query_form.from_yu_day))
+                query = query.filter(Contract.repay_date >= f_date)
+            if query_form.to_yu_day:
+                t_date = now - datetime.timedelta(days=int(query_form.to_yu_day))
+                query = query.filter(Contract.repay_date <= t_date)
+
+
+            if query_form.repay_date and query_form.repay_date!='null':
+                query = query.filter(Contract.repay_date <= query_form.repay_date)
             return query.order_by(Contract.loan_date.desc(),Contract.contract_no.desc())
-        contracts = get_query().paginate(int(page), per_page=10, error_out=False)
+
+        contracts = get_query().paginate(int(query_form.page), per_page=10, error_out=False)
         page_contracts = contracts.items
         num = contracts.total
         contract_list = []

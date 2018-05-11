@@ -5,8 +5,7 @@ from . import main
 from .table_data_server import FileExecute,DataExecute
 import json
 from .. import config
-from .utils import TokenTest
-
+from .utils import TokenTest, QueryForm
 
 
 # @main.route('/',methods=['GET','POST'])
@@ -86,17 +85,22 @@ def get_contract():
 @main.route('/charge/contract/select',methods=['POST'])
 @TokenTest
 def get_contract_deal():
-    page = request.form.get('page')
-    customer=request.form.get('customer')
-    shop = request.form.get('shop')
-    contract_no=request.form.get('contract_no')
-    repay_date=request.form.get('repay_date')
-    id_number=request.form.get('id_number')
-    is_dealt=request.form.get('is_dealt')   #1为已处理，0为未处理
-    is_settled=request.form.get('is_settled')   #合同状态是否(0、还款中；100、逾期；200、移交外催；300、结清)
-    file_id=request.form.get('file_id')
+
     execute = DataExecute()
-    result=execute.get_deal_refund(contract_no,customer,shop,repay_date,is_dealt,is_settled,page,id_number,file_id)
+    query = QueryForm()
+    query.page = request.form.get('page')
+    query.customer = request.form.get('customer')
+    query.shop = request.form.get('shop')
+    query.contract_no = request.form.get('contract_no')
+    query.repay_date = request.form.get('repay_date')
+    query.id_number = request.form.get('id_number')
+    query.is_dealt = request.form.get('is_dealt')
+    query.is_settled = request.form.get('is_settled')
+    query.file_id = request.form.get('file_id')
+    query.from_yu_day = request.form.get('from_yu_day')
+    query.to_yu_day = request.form.get('to_yu_day')
+
+    result = execute.get_deal_refund(query)
     return result
 
 #获取合同详细信息(对账详情，上半部分)

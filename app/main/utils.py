@@ -69,7 +69,15 @@ def countDelayDay(plan):
     days = (end_time.date() - plan.deadline.date()).days
     return max(0, days)  # 提前还款处理
 
+def convert(limit):
+    if limit:
+        return '%' + limit + '%'
+    else:
+        return "%"
 
 class MyExpection(Exception):
     def __init__(self, msg):
         self.message = msg
+
+class QueryForm(object):
+    pass
