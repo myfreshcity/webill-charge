@@ -141,7 +141,7 @@ def check_close(commit_plan):
     return is_close
 
 
-# 指定合同冲账 prePay:余额是否按照提前还款冲账
+# 指定合同冲账
 def match_by_contract(contract, refund=None):
     app.logger.info('---合同[%s] 冲账开始---', contract.id)
     # 已结清的合同不应再重复处理
@@ -156,6 +156,8 @@ def match_by_contract(contract, refund=None):
         if refund.remain_amt <= 0:
             app.logger.info('还款流水[%s]余额不足:%s', refund.id, refund.remain_amt)
             return {'code': 5004, 'msg': '还款流水[%s]余额不足:%s' % (refund.id, int(refund.remain_amt/100))}
+        if refund.refund_time < contract.loan_date:
+            return {'code': 5004, 'msg': '还款流水[%s]支付时间早于合同放款时间' % (refund.id)}
 
     commit_plan = get_reduce_plan(contract, refund)
     is_close = check_close(commit_plan)  # 是否一次结清
@@ -184,6 +186,9 @@ def match_by_contract(contract, refund=None):
 # 指定还款流水冲账
 def match_by_refund(refund):
     app.logger.info('---还款流水[%s] 冲账开始---', refund.id)
+    # 初始化流水状态
+    refund.t_status = 2
+    db.session.commit()
     # 根据姓名寻找待还款的合同
     # 移交外催的合同不自动处理，但可人工冲账
     contracts = Contract.query.filter(Contract.customer == refund.refund_name,
@@ -226,8 +231,6 @@ def match_by_refund(refund):
                             break
     else:
         app.logger.warning('还款流水[%s] 没有找到可冲账合同', refund.id)
-        refund.t_status = 2
-        db.session.commit()
         return {'code': 5006, 'msg': '还款流水[%s] 没有找到可冲账合同' % (refund.id)}
 
     app.logger.info('---还款流水[%s] 冲账结束---', refund.id)
