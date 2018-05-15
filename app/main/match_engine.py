@@ -93,7 +93,8 @@ def do_contract_refund(contract, tplans, refund=None, commit_plan=None):
     if commit_plan:
         v += commit_plan.remain_amt
         app.logger.info('从减免计划[%s]获得减免额[%s]使用给贷款合同[%s]', commit_plan.id,commit_plan.remain_amt, contract.id)
-        flag = do_check_commit_amt(v, tplans)  # 减免额是否足够
+        if refund:
+            flag = do_check_commit_amt(v, tplans)  # 减免额是否足够
 
     if flag:
         for plan in tplans:

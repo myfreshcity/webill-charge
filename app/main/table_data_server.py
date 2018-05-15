@@ -312,17 +312,13 @@ class DataExecute:
         plans = ContractRepay.query.filter(ContractRepay.contract_id == contract.id).all()
         #还款情况
         overtime_list = []
-        overtime_sum = 0
         for plan in plans:
-            overtime_amount = plan.principal+plan.interest
-            overtime_sum +=overtime_amount
-
-            delayDay = countDelayDay(plan)  # 逾期天数
-            fee = countFee(contract.contract_amount, delayDay)
+            delay_day = countDelayDay(plan)  # 逾期天数
+            fee = countFee(contract.contract_amount, delay_day)
 
 
             plan_dict = {'deadline': plan.deadline.strftime("%Y-%m-%d"),
-                         'amount': "%u" % (overtime_amount / 100),
+                         'amount': "%u" % (plan.amt / 100),
                          'tensor': plan.tensor,
                          'settled_date': plan.settled_date.strftime(
                              "%Y-%m-%d") if plan.settled_date else None,
@@ -331,10 +327,8 @@ class DataExecute:
                          'actual_fee': "%u" % (plan.actual_fee / 100),
                          'interest': "%u" % (plan.interest / 100),
                          'fee': "%u" % (fee / 100),
-                         'actual_amt': "%u" % (plan.actual_amt / 100),
-                         'actual_fee': "%u" % (plan.actual_fee / 100),
                          'is_settled': plan.is_settled,
-                         'delay_day': delayDay
+                         'delay_day': delay_day
                          }
             overtime_list.append(plan_dict)
         contract_dic['overtime_list'] = overtime_list
@@ -539,7 +533,8 @@ class DataExecute:
         if commit.type == 1 :
             if commit.result == 100:
                 result = match_by_contract(contract)
-                app.logger.info(result)
+                if result:
+                  return {'isSucceed': 500, 'message': result['msg']}
             elif commit.result == 200:
                 contract.is_dealt = 0 #调整为未处理状态
 
@@ -561,7 +556,7 @@ class DataExecute:
 
         result = match_by_contract(contract, refund)
         if result:
-            return {'isSucceed': 500, 'message': result.msg}
+            return {'isSucceed': 500, 'message': result['msg']}
         else:
             return {'isSucceed': 200, 'message': '冲账成功！'}
 
@@ -573,7 +568,7 @@ class DataExecute:
         from .match_engine import match_by_refund
         result = match_by_refund(refund)
         if result:
-            return {'isSucceed': 500, 'message': result.msg}
+            return {'isSucceed': 500, 'message': result['msg']}
         else:
             return {'isSucceed': 200, 'message': '重新匹配成功！'}
 
