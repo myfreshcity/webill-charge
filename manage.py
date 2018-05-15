@@ -7,7 +7,7 @@ from flask_script import Manager,Shell
 from flask_cors import *
 from app.main.table_data_server import DataExecute
 
-app = create_app("dev")
+app = create_app()
 register_blueprints(app)
 CORS(app, supports_credentials=True)
 

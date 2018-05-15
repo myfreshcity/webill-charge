@@ -1,4 +1,12 @@
 
+ALTER TABLE `t_contract_repay` CHANGE COLUMN `deadline` `deadline` date NOT NULL COMMENT '应还日期';
+
+ALTER TABLE `t_contract` CHANGE COLUMN `loan_date` `loan_date` date DEFAULT NULL COMMENT '放款日期';
+
+ALTER TABLE `t_contract` ADD COLUMN `delay_day` int NOT NULL DEFAULT '0' COMMENT '最长逾期天数' AFTER `repay_date`;
+
+ALTER TABLE `t_repayment` ADD COLUMN `shop` varchar(20) COMMENT '所在门店' AFTER `refund_time`;
+
 --20180418--
 update t_contract set delayed_day=null;
 ALTER TABLE `t_contract` CHANGE COLUMN `delayed_day` `repay_date` date DEFAULT NULL COMMENT '最近还款日',

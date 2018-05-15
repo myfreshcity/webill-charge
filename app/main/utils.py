@@ -4,6 +4,8 @@ import re,datetime,requests,json
 from flask import request,jsonify
 from functools import wraps
 
+from app import app
+
 
 def DateStrToDate(DateString,hour=0,minute=0,seconds=0):
     date_set = re.findall('(.+)-(.+)-(.+)', DateString)
@@ -11,16 +13,22 @@ def DateStrToDate(DateString,hour=0,minute=0,seconds=0):
                                    int(minute),int(seconds))
     return date
 
+def date2datetime(dt):
+    return datetime.datetime.strptime(str(dt), '%Y-%m-%d')
+
 
 #token验证
 def TokenTest(func):
     @wraps(func)
     def outer(*args,**kwargs):
         from .. import config
-        if config['dev'].TOKEN_TEST_BUTTON:
+        token_t_btn = app.config['TOKEN_TEST_BUTTON']
+        token_t_url = app.config['TOKEN_TEST_URL']
+
+        if token_t_btn:
             token = request.headers.get('token')
             #token = 'eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIxNTEyMTE5MzE0MCIsImlhdCI6MTUyMTcwNzY0Nywic3ViIjoibW9iaWxlTm8iLCJpc3MiOiJtbWgiLCJleHAiOjE1MjE3MDk0NDd9.GmYl_YFH8xGiUfWpBpJnFQhzl-WB9MfKQgwnc0M4TTk'
-            req = requests.post(url=config['dev'].TOKEN_TEST_URL,data=json.dumps({'token':token}))
+            req = requests.post(url=token_t_url,data=json.dumps({'token':token}))
             message = req.json()
             print(message)
             if int(message['result'])!=2:
@@ -66,7 +74,7 @@ def countDelayDay(plan):
     if plan.settled_date and plan.actual_amt >= plan.amt:
         end_time = plan.settled_date
 
-    days = (end_time.date() - plan.deadline.date()).days
+    days = (end_time.date() - plan.deadline).days
     return max(0, days)  # 提前还款处理
 
 def convert(limit):

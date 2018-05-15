@@ -1,6 +1,7 @@
 import datetime
 
 from flask import current_app
+from sqlalchemy import func
 
 from app import db, app
 from app.main.utils import countFee, countDelayDay
@@ -23,18 +24,19 @@ def get_reduce_plan(contract, refund):
         return None
 
 # 获取未还清还款计划 0:全部 1:仅逾期 2:仅未到期
-def get_refund_plan(contract_id, flag):
-    tplans = ContractRepay.query.filter(ContractRepay.is_settled == 0)
+def get_refund_plan(contract_id, flag=0, refund=None):
+    tplans = ContractRepay.query.filter(ContractRepay.is_settled == 0,ContractRepay.contract_id == contract_id)
 
-    if contract_id:
-        tplans = tplans.filter(ContractRepay.contract_id == contract_id)
+    if refund:
+        end_time = refund.refund_time
+    else:
+        end_time =  datetime.datetime.now()
 
-    now =  datetime.datetime.now()
-    end_time = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_time = end_time.date()
 
-    if flag == 1:  # 逾期
-        tplans = tplans.filter(ContractRepay.deadline < end_time)
-    if flag == 2:  # 未到期
+    if flag == 1:  # 逾期(包含当期)
+        tplans = tplans.filter(ContractRepay.deadline <= end_time)
+    if flag == 2:  # 未到期(包含当期)
         tplans = tplans.filter(ContractRepay.deadline >= end_time)
 
     tplans = tplans.order_by(ContractRepay.deadline.asc()).all()
@@ -53,23 +55,56 @@ def add_match_log(m_type,contract_id,plan_id,fund_id,amt=0,f_remain_amt=0,p_rema
     log.remark = remark
     db.session.add(log)
 
+# 最近还款日期
+def get_latest_repay_date(contract_id):
+    dt = db.session.query(func.min(ContractRepay.deadline))\
+        .filter(ContractRepay.contract_id == contract_id,ContractRepay.actual_amt < ContractRepay.amt)\
+        .scalar()
+    return dt
+
+# 同步合同状态
+def syn_contract_status(contract):
+    from sqlalchemy import func
+    delay_day = db.session.query(func.max(ContractRepay.delay_day)).filter(ContractRepay.contract_id == contract.id,
+                                                                           ContractRepay.is_settled == 0).scalar()
+
+    if delay_day is None:
+        contract.delay_day = 0
+        contract.is_settled = 300  # 设置初始状态为结清
+        contract.repay_date = None
+        app.logger.info('贷款合同[%s]已结清', contract.id)
+
+    if contract.is_settled == 0 or contract.is_settled == 100:
+        if delay_day > 0:
+            contract.delay_day = delay_day
+            contract.repay_date = get_latest_repay_date(contract.id)
+            contract.is_settled = 100  # 设置为逾期状态
+        else:
+            contract.delay_day = delay_day
+            contract.repay_date = get_latest_repay_date(contract.id)
+            contract.is_settled = 0  # 设置初始状态为还款中
+
+
 # 计算每日逾期费用
 def count_daily_delay():
     with app.app_context():
         app.logger.info('---每日逾期费用计算开始---')
-        plans = get_refund_plan(None,1)
+
+        plans = ContractRepay.query.filter(ContractRepay.is_settled == 0)\
+            .filter(ContractRepay.deadline < datetime.date.today())\
+            .order_by(ContractRepay.deadline.asc()).all()
+
         if plans:
             for plan in plans:
                 contract_id = plan.contract_id
                 contract = Contract.query.filter(Contract.id == contract_id).first()
-                contractAmt = contract.contract_amount #合同额
-                delayDay = countDelayDay(plan) #逾期天数
-                fee = countFee(contractAmt,delayDay)
+                contractAmt = contract.contract_amount  # 合同额
+                delayDay = countDelayDay(plan)  # 逾期天数
+                fee = countFee(contractAmt, delayDay)
 
                 plan.fee = fee
                 plan.delay_day = delayDay
-                if contract.is_settled == 0 and fee > 0: # 排除已移交外催的合同
-                    contract.is_settled = 100  # 设置为逾期状态
+                syn_contract_status(contract)
 
                 app.logger.info('---还款计划[%s] 计算结束---', plan.id)
         db.session.commit()

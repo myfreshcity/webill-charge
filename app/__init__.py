@@ -47,15 +47,14 @@ class FlaskCelery(Celery):
         self.config_from_object(app.config)
 
 app.config.from_object(config['dev'])
-config['dev'].init_app(app)
 celery = FlaskCelery(app.name, broker=app.config['CELERY_BROKER_URL'], include=['app.tasks'])
 celery.init_app(app)
-
 
 bootstrap=Bootstrap()
 moment=Moment()
 db=SQLAlchemy()
 db.init_app(app)
+
 login_manager=LoginManager()
 mdb = MongoEngine()
 login_manager.session_protection = 'strong'
@@ -71,10 +70,9 @@ def daily_quest():
     print('quest has done')
 
 
-def create_app(config_name):
-    config = app.config
-    handler = logging.handlers.RotatingFileHandler(config.get('LOG_FILENAME'),
-                                                   maxBytes=config.get('LOG_FILESIZE'),
+def create_app(configName=None):
+    handler = logging.handlers.RotatingFileHandler(app.config.get('LOG_FILENAME'),
+                                                   maxBytes=app.config.get('LOG_FILESIZE'),
                                                    backupCount=20, encoding='UTF-8')
     handler.setLevel(logging.DEBUG)
     logging_format = logging.Formatter(
@@ -83,6 +81,7 @@ def create_app(config_name):
     app.logger.addHandler(handler)
 
     app.logger.info('begin run application ...')
+
     bootstrap.init_app(app)
     moment.init_app(app)
     login_manager.init_app(app)

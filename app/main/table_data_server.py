@@ -10,7 +10,7 @@ from app.main.utils import countFee, countDelayDay, convert
 from ..models import *
 from sqlalchemy import and_
 from .utils import DateStrToDate
-from .. import db, app, celery
+from .. import db, app
 
 
 class FileExecute:
@@ -18,7 +18,7 @@ class FileExecute:
         from .. import config
         self.file = file
         self.file_kind = kind
-        self.file_dir = config['dev'].UPLOAD_FOLD
+        self.file_dir = app.config['UPLOAD_FOLD']
         self.filename = None
 
     def execute_file(self):
@@ -234,8 +234,8 @@ class DataExecute:
             contract_dic['tensor'] = contract.tensor
             contract_dic['deal_status'] = contract.is_dealt
             contract_dic['upload_time'] = contract.create_timed.strftime("%Y-%m-%d")
-            now = datetime.datetime.now()
-            end_time = now.replace(hour=0, minute=0, second=0, microsecond=0) + datetime.timedelta(days=1)
+
+            end_time = datetime.date.today() + datetime.timedelta(days=1)
 
             refund_plans=ContractRepay.query.filter(ContractRepay.contract_id == contract.id, ContractRepay.is_settled == 0, ContractRepay.deadline < end_time).all()
             if refund_plans:
@@ -261,10 +261,9 @@ class DataExecute:
 
         if int(all) ==0:#如果是获取未处理列表
             contracts_list = []
-            now = datetime.datetime.now()
-            end_time = now.replace(hour=0, minute=0, second=0, microsecond=0) + datetime.timedelta(days=1)
+            end_time = datetime.date.today() + datetime.timedelta(days=1)
             for contract in contracts:
-                overtime_plans = ContractRepay.query.filter(ContractRepay.contract_id == contract.id,
+                plans = ContractRepay.query.filter(ContractRepay.contract_id == contract.id,
                                                          ContractRepay.is_settled == 0,
                                                          ContractRepay.deadline <= end_time).all()
                 if plans:
@@ -393,30 +392,22 @@ class DataExecute:
         contract_dic['real_pays']=real_pay_list
         return  contract_dic
 
-    def get_unlinked_refund(self,page=None,customer=None,refund_date=None,range=None):
+    def get_unlinked_refund(self,page,customer=None,refund_date=None,range=None):
         if not [page,customer,refund_date,range]:
             return {'isSucceed':500,'message':'参数错误'}
 
-        if page:page= int(page)
-        else:page = 1
-        if refund_date:
-            start_date = DateStrToDate(refund_date,0,0,0)
-            end_date = DateStrToDate(refund_date,23,23,23)
-        else:
-            start_date = datetime.datetime(1990, 1, 1)
-            end_date = datetime.datetime.now()
-        if range:
-            min_sum,max_sum = re.findall("(.+)-(.+)",range)[0]
-            min_sum,max_sum = int(min_sum),int(max_sum)
-        else:
-            min_sum,max_sum = 0,10**9
-        if not customer:
-            customer = "%"
+        unlinked_refunds = Repayment.query.filter(Repayment.remain_amt > 0)
 
-        unlinked_refunds = Repayment.query.filter(Repayment.remain_amt >0,
-                                                  Repayment.create_time.between(start_date, end_date),
-                                                  Repayment.amount.between(min_sum, max_sum),
-                                                  Repayment.refund_name.like(customer)).paginate(int(page), per_page=10, error_out=False)
+        if refund_date:
+            start_date = DateStrToDate(refund_date, 0, 0, 0)
+            end_date = DateStrToDate(refund_date, 23, 23, 23)
+            unlinked_refunds = unlinked_refunds.filter(Repayment.refund_time.between(start_date, end_date))
+        if range:
+            unlinked_refunds = unlinked_refunds.filter(Repayment.amount == int(range) * 100)
+        if customer:
+            unlinked_refunds = unlinked_refunds.filter(Repayment.refund_name.like(convert(customer)))
+
+        unlinked_refunds = unlinked_refunds.paginate(int(page), per_page=10, error_out=False)
         page_refunds = unlinked_refunds.items
         num = unlinked_refunds.total
         unlinked_list = []
@@ -655,17 +646,16 @@ class DataExecute:
             lists = []
         return lists
 
-    def test(self):
-        from .sqlhelper import  delete_contract_by_no
-        delete_contract_by_no(['200803281000','1111'])
-
     def get_newest_date(self):
-        from .sqlhelper import refund_newest_date
-        refunds = refund_newest_date()
+        from sqlalchemy import func
+        refunds = db.session.query(func.max(Repayment.refund_time),
+                                   Repayment.shop,
+                                   Repayment.method).group_by(Repayment.shop,Repayment.method).all()
         refund_list = []
         if refunds:
             for refund in refunds:
-                refundsStr = {'shop':refund['shop'],'way':refund['way'],'refundTime':refund['refund_time'].strftime("%Y-%m-%d %H:%M:%S")}
+                (ftime,shop,way) = refund
+                refundsStr = {'shop':shop,'way':way,'refundTime':ftime.strftime("%Y-%m-%d %H:%M:%S")}
                 refund_list.append(refundsStr)
             result_dic = {'isSucceed':200,'refund_list':refund_list,'message':'查询各门店最新支付时间成功！'}
         else:
@@ -678,19 +668,16 @@ class DataExecute:
             if file_id:
                 query = query.filter(Repayment.file_id == file_id)
             if refund_name:
-                query = query.filter(Repayment.refund_name == refund_name)
+                query = query.filter(Repayment.refund_name.like(convert(refund_name)))
             if is_match:
                 query = query.filter(Repayment.t_status == is_match)
             if shop:  # 门店
-                query = query.filter(Repayment.shop.like(shop))
+                query = query.filter(Repayment.shop.like(convert(shop)))
             if refund_time:
                 start_date = DateStrToDate(refund_time, 0, 0, 0)
                 end_date = DateStrToDate(refund_time, 23, 59, 59)
                 query = query.filter(Repayment.refund_time.between(start_date, end_date))
-            else:
-                start_date = datetime.datetime(1990, 1, 1)
-                end_date = datetime.datetime.now()
-                query = query.filter(Repayment.refund_time.between(start_date, end_date))
+
             return query.order_by(Repayment.create_time.desc(),Repayment.refund_time.desc())
 
         pagination = get_query().paginate(int(page), per_page=10, error_out=False)
@@ -729,10 +716,8 @@ class DataExecute:
             contract_dic['loan_amount'] = "%u" % (contract.loan_amount / 100)
             contract_dic['contract_amount'] = "%u" % (contract.contract_amount / 100)
             contract_dic['loan_date'] = contract.loan_date.strftime('%Y-%m-%d')
-            delay_days = None
-            if contract.repay_date:
-                delay_days = (datetime.datetime.now().date() - contract.repay_date).days
-            contract_dic['delay_days'] = delay_days
+
+            contract_dic['delay_days'] = contract.delay_day
             contract_dic['id_number'] = contract.id_number
             contract_dic['tensor'] = contract.tensor
             contract_dic['is_settled'] = contract.is_settled
@@ -743,7 +728,6 @@ class DataExecute:
             return contract_dic
 
         def get_query():
-            now = datetime.datetime.now().replace(hour=0,minute=1,second=0, microsecond=0)
 
             query = Contract.query
             if query_form.contract_no:  # 合同编号
@@ -761,13 +745,9 @@ class DataExecute:
             if query_form.file_id:  # 合同文件编号
                 query = query.filter(Contract.file_id == query_form.file_id)
             if query_form.from_yu_day:
-                f_date = now - datetime.timedelta(days=int(query_form.from_yu_day))
-                ff_date = f_date.replace(hour=23,minute=59,second=59, microsecond=999999)
-                query = query.filter(Contract.repay_date <= ff_date)
+                query = query.filter(Contract.delay_day >= int(query_form.from_yu_day))
             if query_form.to_yu_day:
-                t_date = now - datetime.timedelta(days=int(query_form.to_yu_day))
-                tt_date = t_date.replace(hour=0,minute=0,second=0, microsecond=0)
-                query = query.filter(Contract.repay_date >= tt_date)
+                query = query.filter(Contract.repay_date <= int(query_form.to_yu_day))
 
 
             if query_form.repay_date and query_form.repay_date!='null':

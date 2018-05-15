@@ -31,14 +31,14 @@ from .utils import TokenTest, QueryForm
 
 @main.route('/charge/plan/download',methods=['POST','GET'])
 def download_plan():
-    dictory = config['dev'].DOWNLOAD_FOLD
+    dictory = app.config['DOWNLOAD_FOLD']
     filename = "refund_plan.xls"
     return send_from_directory(dictory,filename,as_attachment=True)
 
 #下载流水文件
 @main.route('/charge/refund/download',methods=['POST','GET'])
 def download_refund():
-    dictory = config['dev'].DOWNLOAD_FOLD
+    dictory = app.config['DOWNLOAD_FOLD']
     filename = "refund.xls"
     return send_from_directory(dictory,filename,as_attachment=True)
 

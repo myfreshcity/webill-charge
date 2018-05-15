@@ -1,6 +1,7 @@
 from app import app
-from app.main.db_service import get_reduce_plan, get_refund_plan, add_match_log
-from app.main.utils import countFee, countDelayDay, MyExpection
+from app.main.db_service import get_reduce_plan, get_refund_plan, add_match_log, get_latest_repay_date, \
+    syn_contract_status
+from app.main.utils import countFee, countDelayDay, MyExpection, date2datetime
 from app.models import *
 
 
@@ -16,9 +17,9 @@ def do_real_fund(contract, tplans, refund,commit_plan):
         for plan in tplans:
             balance_fee(plan, refund, contract)
     else:
-        for plan in tplans:
-            balance_amount(plan, refund, contract)
-            balance_fee(plan, refund, contract)
+        plan = tplans[0]
+        balance_amount(plan, refund, contract)
+        balance_fee(plan, refund, contract)
 
 
 #冲本息
@@ -115,21 +116,7 @@ def do_contract_refund(contract, tplans, refund=None, commit_plan=None):
 
 
     # 同步合同状态
-    if not get_refund_plan(contract.id, 0):
-        contract.is_settled = 300  # 设置初始状态为结清
-        contract.repay_date = None
-        app.logger.info('贷款合同[%s]已结清', contract.id)
-
-    if contract.is_settled == 0 or contract.is_settled == 100:
-        plans = get_refund_plan(contract.id, 1)
-        if plans:
-            contract.repay_date = plans[0].deadline.date()
-            contract.is_settled = 100  # 设置为逾期状态
-        else:
-            plans2 = get_refund_plan(contract.id, 2)
-            if plans2:
-                contract.repay_date = plans2[0].deadline.date()
-                contract.is_settled = 0  # 设置初始状态为还款中
+    syn_contract_status(contract)
 
 
 # 是否一次结清
@@ -156,19 +143,19 @@ def match_by_contract(contract, refund=None):
         if refund.remain_amt <= 0:
             app.logger.info('还款流水[%s]余额不足:%s', refund.id, refund.remain_amt)
             return {'code': 5004, 'msg': '还款流水[%s]余额不足:%s' % (refund.id, int(refund.remain_amt/100))}
-        if refund.refund_time < contract.loan_date:
+        if refund.refund_time < date2datetime(contract.loan_date):
             return {'code': 5004, 'msg': '还款流水[%s]支付时间早于合同放款时间' % (refund.id)}
 
     commit_plan = get_reduce_plan(contract, refund)
     is_close = check_close(commit_plan)  # 是否一次结清
 
     if is_close:
-        plans = get_refund_plan(contract.id, 0)
+        plans = get_refund_plan(contract.id)
     else:
         # 先按照逾期还款，否则按照提前还款
-        plans = get_refund_plan(contract.id, 1)
+        plans = get_refund_plan(contract.id, 1, refund)
         if not plans:
-            plans = get_refund_plan(contract.id, 2)
+            plans = get_refund_plan(contract.id, 2, refund)
 
     try:
         do_contract_refund(contract, plans, refund, commit_plan)
@@ -212,7 +199,7 @@ def match_by_refund(refund):
                 return match_by_contract(contracts[0], refund)
 
             elif cl > 1:
-                # 如果是多笔合同，先处理每笔合同逾期情况，余额再作为提前还款
+                # 如果是多笔合同，先按照逾期情况处理
                 if refund.remain_amt > 0:
                     # 先不要处理提前还款
                     for c in contracts:
@@ -221,14 +208,7 @@ def match_by_refund(refund):
                             return r
                         if refund.remain_amt <= 0:
                             break
-                if refund.remain_amt > 0:
-                    # 如有余额再进行提前还款
-                    for c in contracts:
-                        r = match_by_contract(c, refund)
-                        if r:
-                            return r
-                        if refund.remain_amt <= 0:
-                            break
+
     else:
         app.logger.warning('还款流水[%s] 没有找到可冲账合同', refund.id)
         return {'code': 5006, 'msg': '还款流水[%s] 没有找到可冲账合同' % (refund.id)}
