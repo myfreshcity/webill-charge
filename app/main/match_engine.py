@@ -180,6 +180,7 @@ def match_by_refund(refund):
     # 根据姓名寻找待还款的合同
     # 移交外催的合同不自动处理，但可人工冲账
     contracts = Contract.query.filter(Contract.customer == refund.refund_name,
+                                      Contract.shop == refund.shop,
                                       Contract.is_settled < 300) \
                                         .order_by(Contract.loan_date.asc()).all()
     if contracts:

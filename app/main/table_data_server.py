@@ -408,7 +408,9 @@ class DataExecute:
         for unlinked_refund in page_refunds:
             unlinked_dic = {'refund_date': unlinked_refund.refund_time.strftime("%Y-%m-%d"),
                             'refund_time': unlinked_refund.refund_time.strftime('%H:%M:%S'),
-                            'refund_name': unlinked_refund.refund_name, 'card_id': unlinked_refund.card_id,
+                            'refund_name': unlinked_refund.refund_name,
+                            'card_id': unlinked_refund.card_id,
+                            'shop': unlinked_refund.shop,
                             'amount': "%u" % (unlinked_refund.amount / 100),
                             'remain_amt': "%u" % (unlinked_refund.remain_amt / 100),
                             'type': unlinked_refund.method, 'refund_id': unlinked_refund.id}
@@ -742,7 +744,7 @@ class DataExecute:
             if query_form.from_yu_day:
                 query = query.filter(Contract.delay_day >= int(query_form.from_yu_day))
             if query_form.to_yu_day:
-                query = query.filter(Contract.repay_date <= int(query_form.to_yu_day))
+                query = query.filter(Contract.delay_day <= int(query_form.to_yu_day))
 
 
             if query_form.repay_date and query_form.repay_date!='null':
