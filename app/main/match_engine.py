@@ -1,7 +1,6 @@
 from app import app
-from app.main.db_service import get_reduce_plan, get_refund_plan, add_match_log, get_latest_repay_date, \
-    syn_contract_status
-from app.main.utils import countFee, countDelayDay, MyExpection, date2datetime
+from app.main.db_service import get_reduce_plan, get_refund_plan, add_match_log, syn_contract_status, recount_fee
+from app.main.utils import MyExpection, date2datetime
 from app.models import *
 
 
@@ -30,7 +29,8 @@ def balance_amount(plan,refund,contract):
         plan.actual_amt += _b
         refund.remain_amt -= _b
         refund.contract_id = plan.contract_id
-        plan.settled_date = refund.refund_time
+        if plan.actual_amt >= plan.amt:
+            plan.settled_date = refund.refund_time
         add_match_log(0, contract.id, plan.id, refund.id,
                       _b, refund.remain_amt,
                       plan.amt - plan.actual_amt,'本息冲账')
@@ -40,7 +40,7 @@ def balance_amount(plan,refund,contract):
                         plan.amt - plan.actual_amt)
 #冲滞纳金
 def balance_fee(plan,refund,contract):
-    recount_fee(plan, refund, contract)  # 重新计算滞纳金
+    recount_fee(plan, contract)  # 重新计算滞纳金
     fc = plan.fee - plan.actual_fee  # 计算应冲值金额
     if fc > 0 and refund.remain_amt > 0:
         _a = min(refund.remain_amt, fc)  # 取最小值冲账
@@ -55,18 +55,6 @@ def balance_fee(plan,refund,contract):
                         refund.id, plan.id,
                         _a, refund.remain_amt,
                         plan.fee - plan.actual_fee)
-
-
-# 重新计算滞纳金
-def recount_fee(plan, refund, contract):
-    if plan.actual_amt >= plan.amt:  # 仅对还清本息的还款计划有效
-        n_delay_day = countDelayDay(plan)  # 逾期天数
-        if n_delay_day != plan.delay_day:
-            fee = countFee(contract.contract_amount, n_delay_day)
-            app.logger.info('还款流水[%s]因导入时间和实际还款时间的不一致，调整还款计划[%s]逾期天数:%s，滞纳金:%s,为逾期天数:%s，滞纳金:%s',
-                            refund.id, plan.id, plan.delay_day, plan.fee, n_delay_day,fee)
-            plan.fee = max(0, fee)  # 提前还款的直接归零
-            plan.delay_day = max(0, n_delay_day)  # 提前还款的直接归零
 
 
 def do_check_commit_amt(reduce_amt, tplans):
@@ -93,8 +81,7 @@ def do_contract_refund(contract, tplans, refund=None, commit_plan=None):
     if commit_plan:
         v += commit_plan.remain_amt
         app.logger.info('从减免计划[%s]获得减免额[%s]使用给贷款合同[%s]', commit_plan.id,commit_plan.remain_amt, contract.id)
-        if refund:
-            flag = do_check_commit_amt(v, tplans)  # 减免额是否足够
+        flag = do_check_commit_amt(v, tplans)  # 减免额是否足够
 
     if flag:
         for plan in tplans:
@@ -104,9 +91,10 @@ def do_contract_refund(contract, tplans, refund=None, commit_plan=None):
                 app.logger.info('还款计划[%s]已结清', plan.id)
                 if commit_plan:
                     commit_plan.remain_amt -= offV
-                    add_match_log(3, contract.id, plan.id, commit_plan.id,
+                    rfid = refund.id if refund else None
+                    add_match_log(3, contract.id, plan.id, rfid,
                                   offV, commit_plan.remain_amt,
-                                  0, '使用减免')
+                                  0, '使用减免:%s' % (commit_plan.id))
                 v -= offV
             else:
                 if commit_plan:

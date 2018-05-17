@@ -419,7 +419,7 @@ class DataExecute:
 
 
     #修改还款信息
-    def create_commit(self,contract_no,user_id,amount,commit,type=0,discount_type=0):
+    def create_commit(self,contract_no,user_id,pay_amt,amount,remark,type=0,discount_type=0):
         contract = Contract.query.filter(Contract.contract_no==contract_no).first()
         if not contract:
             return {'isSucceed': 500, 'message': '未找到合同'}
@@ -429,12 +429,13 @@ class DataExecute:
         commit_refund.contract_id = contract.id
         commit_refund.apply_date = now  # 申请日期
         commit_refund.type = int(type)  # 协商类型
-        commit_refund.remark = commit  # 备注
+        commit_refund.remark = remark  # 备注
         commit_refund.applyer = int(user_id)
         commit_refund.is_valid = 0  # 0、有效；-1；无效
         if type == '1':  # 申请减免
             commit_refund.result = 0  # 0、待审核；100、通过；200、拒绝
             commit_refund.discount_type = int(discount_type)  # 减免类型
+            commit_refund.pay_amt = int(pay_amt) * 100
             commit_refund.amount = int(amount) * 100  # 协商金额
             commit_refund.remain_amt = int(amount) * 100  # 协商金额
         if type == '2':  # 移交外催
@@ -534,9 +535,10 @@ class DataExecute:
         # 减免审批通过后执行冲账
         if commit.type == 1 :
             if commit.result == 100:
-                result = match_by_contract(contract)
-                if result:
-                  return {'isSucceed': 500, 'message': result['msg']}
+                if commit.pay_amt == 0:
+                    result = match_by_contract(contract)
+                    if result:
+                        return {'isSucceed': 500, 'message': result['msg']}
             elif commit.result == 200:
                 contract.is_dealt = 0 #调整为未处理状态
 
@@ -564,9 +566,9 @@ class DataExecute:
 
     #还款流水重新匹配
     def refund_re_match(self,refund_id):
-        refund = Repayment.query.filter(Repayment.id==refund_id,Repayment.contract_id.is_(None)).first()
-        if not refund:
-            return {'isSucceed': 500, 'message': '未找到还款流水'}
+        refund = Repayment.query.filter(Repayment.id==refund_id).one()
+        if refund.contract_id:
+            return {'isSucceed': 500, 'message': '该还款流水已被使用'}
         from .match_engine import match_by_refund
         result = match_by_refund(refund)
         if result:
@@ -713,7 +715,7 @@ class DataExecute:
             contract_dic['loan_amount'] = "%u" % (contract.loan_amount / 100)
             contract_dic['contract_amount'] = "%u" % (contract.contract_amount / 100)
             contract_dic['loan_date'] = contract.loan_date.strftime('%Y-%m-%d')
-            contract_dic['repay_date'] = contract.repay_date.strftime('%Y-%m-%d')
+            contract_dic['repay_date'] = contract.repay_date.strftime('%Y-%m-%d') if contract.repay_date else '-'
 
             contract_dic['delay_days'] = contract.delay_day
             contract_dic['mobile_no'] = contract.mobile_no

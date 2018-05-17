@@ -1,4 +1,6 @@
 
+ALTER TABLE `t_commit_info` ADD COLUMN `pay_amt` int(20) NOT NULL DEFAULT '0' COMMENT '实际支付额' AFTER `applyer`;
+
 ALTER TABLE `t_contract_repay` CHANGE COLUMN `deadline` `deadline` date NOT NULL COMMENT '应还日期';
 
 ALTER TABLE `t_contract` CHANGE COLUMN `loan_date` `loan_date` date DEFAULT NULL COMMENT '放款日期';

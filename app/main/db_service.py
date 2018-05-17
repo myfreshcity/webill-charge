@@ -4,8 +4,8 @@ from flask import current_app
 from sqlalchemy import func
 
 from app import db, app
-from app.main.utils import countFee, countDelayDay
-from app.models import CommitInfo, ContractRepay, FundMatchLog, Contract
+from app.main.utils import countFee, countDelayDay, MyExpection
+from app.models import CommitInfo, ContractRepay, FundMatchLog, Contract, Repayment
 
 
 # 获取有效减免审批建议
@@ -62,6 +62,68 @@ def get_latest_repay_date(contract_id):
         .scalar()
     return dt
 
+# 删除合同
+def do_del_contract(contract_id):
+    result = db.session.query(FundMatchLog).filter(FundMatchLog.contract_id == contract_id, FundMatchLog.t_status == 0).all()
+    if result:
+        return {'isSucceed': 500, 'message': '发现已入账的数据'}
+    else:
+        contract = db.session.query(Contract).filter(Contract.id == contract_id).one()
+        db.session.delete(contract)
+        db.session.commit()
+    return {'isSucceed': 200, 'message': ''}
+
+# 重置还款流水
+def do_refund_reset(refund_id):
+    result = db.session.query(func.count(FundMatchLog.contract_id),FundMatchLog.contract_id)\
+        .filter(FundMatchLog.fund_id == refund_id, FundMatchLog.t_status == 0)\
+        .group_by(FundMatchLog.contract_id).all()
+    if not result:
+        return {'isSucceed': 500, 'message': '没发现冲账合同'}
+
+    try:
+        for (amt,contract_id) in result:
+            do_refund_reset_by_contract(contract_id, refund_id)
+    except MyExpection as e:
+        db.session.rollback()
+        return {'isSucceed': 500, 'message': e.message}
+
+    db.session.commit()
+    return {'isSucceed': 200, 'message': ''}
+
+def do_refund_reset_by_contract(contract_id,refund_id):
+    mlogs = db.session.query(FundMatchLog).filter(FundMatchLog.contract_id == contract_id, FundMatchLog.t_status == 0).order_by(FundMatchLog.id.desc()).all()
+
+    if mlogs[0].fund_id != refund_id:
+        raise MyExpection('非最后一笔冲账流水，请先重置最后一笔还款流水或取消减免计划【%s】' % (contract_id))
+
+    contract = db.session.query(Contract).filter(Contract.id == contract_id).one()
+    repayment = db.session.query(Repayment).filter(Repayment.id == refund_id).one()
+    repayment.contract_id = None
+    repayment.t_status = 2
+
+    mlogs = db.session.query(FundMatchLog).filter(FundMatchLog.fund_id == refund_id, FundMatchLog.contract_id == contract_id, FundMatchLog.t_status == 0) \
+        .order_by(FundMatchLog.created_time.desc()).all()
+
+    for mlog in mlogs:
+        if mlog.fund_id == refund_id:
+            mlog.t_status = -1
+            repayment.remain_amt += mlog.amount
+
+            # 还款计划处理
+            plan = db.session.query(ContractRepay).filter(ContractRepay.id == mlog.plan_id).one()
+            plan.is_settled = 0
+            if mlog.match_type == 0:  # 本息
+                plan.actual_amt -= mlog.amount
+                plan.settled_date = None
+                recount_fee(plan, contract)  # 滞纳金重新计算
+            elif mlog.match_type == 1:  # 滞纳金
+                plan.actual_fee -= mlog.amount
+        else:
+            break
+    syn_contract_status(contract)
+
+
 # 同步合同状态
 def syn_contract_status(contract):
     from sqlalchemy import func
@@ -74,15 +136,14 @@ def syn_contract_status(contract):
         contract.repay_date = None
         app.logger.info('贷款合同[%s]已结清', contract.id)
 
-    if contract.is_settled == 0 or contract.is_settled == 100:
-        if delay_day > 0:
-            contract.delay_day = delay_day
-            contract.repay_date = get_latest_repay_date(contract.id)
-            contract.is_settled = 100  # 设置为逾期状态
-        else:
-            contract.delay_day = delay_day
-            contract.repay_date = get_latest_repay_date(contract.id)
-            contract.is_settled = 0  # 设置初始状态为还款中
+    elif delay_day > 0:
+        contract.delay_day = delay_day
+        contract.repay_date = get_latest_repay_date(contract.id)
+        contract.is_settled = 100  # 设置为逾期状态
+    else:
+        contract.delay_day = delay_day
+        contract.repay_date = get_latest_repay_date(contract.id)
+        contract.is_settled = 0  # 设置初始状态为还款中
 
 
 # 计算每日逾期费用
@@ -108,3 +169,15 @@ def count_daily_delay():
 
                 app.logger.info('---还款计划[%s] 计算结束---', plan.id)
         db.session.commit()
+
+# 重新计算滞纳金
+def recount_fee(plan, contract):
+    if plan.actual_amt >= plan.amt:  # 仅对还清本息的还款计划有效
+        n_delay_day = countDelayDay(plan)  # 逾期天数
+        if n_delay_day != plan.delay_day:
+            fee = countFee(contract.contract_amount, n_delay_day)
+
+            app.logger.info('调整还款计划[%s]逾期天数:%s，滞纳金:%s,为逾期天数:%s，滞纳金:%s',
+                            plan.id, plan.delay_day, plan.fee, n_delay_day,fee)
+            plan.fee = max(0, fee)  # 提前还款的直接归零
+            plan.delay_day = max(0, n_delay_day)  # 提前还款的直接归零

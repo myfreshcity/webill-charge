@@ -91,7 +91,7 @@ class Contract(db.Model):
     is_dealt = db.Column(db.Integer,default=0)
     file_id = db.Column(db.Integer,default=0)
 
-    refund_plans = db.relationship("ContractRepay",backref='contract')
+    refund_plans = db.relationship("ContractRepay",backref='contract',cascade="delete, delete-orphan")
     refund = db.relationship('Repayment', backref='contract')
     commit = db.relationship('CommitInfo',backref='contract')
     updated_time = db.Column(db.DateTime)
@@ -164,6 +164,7 @@ class CommitInfo(db.Model):
     applyer = db.Column(db.VARCHAR(20))
     type = db.Column(db.Integer)
     discount_type = db.Column(db.Integer)
+    pay_amt = db.Column(db.Integer,default=0)
     amount = db.Column(db.Integer,default=0)
     remain_amt = db.Column(db.Integer,default=0)
     deadline = db.Column(db.DateTime)

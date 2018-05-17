@@ -1,33 +1,13 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
 from flask import render_template,jsonify,request,send_file,send_from_directory
+
+from app.main.db_service import do_del_contract, do_refund_reset
 from . import main
 from .table_data_server import FileExecute,DataExecute
 import json
-from .. import config
+from .. import config, app
 from .utils import TokenTest, QueryForm
-
-
-# @main.route('/',methods=['GET','POST'])
-# @login_required
-# def index():
-#     form=NameForm()
-#     if form.validate_on_submit():
-#         user=User.query.filter_by(username=form.name.data).first()
-#         print(user)
-#         if user is None:
-#             user=User(username=form.name.data)
-#             db.session.add(user)
-#             db.session.commit()
-#             session["known"]=False
-#         else:
-#             session["known"]=True
-#         session['name']=form.name.data
-#         return redirect(url_for('.index'))
-#     return render_template('index.html', current_time=datetime.utcnow(),form=form,name=session.get("name"),known=session.get("known",False))
-#下载计划文件
-
-
 
 @main.route('/charge/plan/download',methods=['POST','GET'])
 def download_plan():
@@ -82,10 +62,17 @@ def get_contract():
     return result
 
 #对账处理/贷款列表
+@main.route('/charge/contract/del',methods=['POST'])
+@TokenTest
+def del_contract():
+    cid = request.form.get('cid')
+    result = do_del_contract(cid)
+    return result
+
+#对账处理/贷款列表
 @main.route('/charge/contract/select',methods=['POST'])
 @TokenTest
 def get_contract_deal():
-
     execute = DataExecute()
     query = QueryForm()
     query.page = request.form.get('page')
@@ -133,6 +120,13 @@ def refund_re_match():
     result=  execute.refund_re_match(refund_id)
     return result
 
+@main.route('/charge/refund/reset',methods=['POST'])
+@TokenTest
+def refund_reset():
+    refund_id = int(request.form.get('refund_id'))
+    result=  do_refund_reset(refund_id)
+    return result
+
 
 #修改还款信息
 @main.route('/charge/commit/create',methods=['POST'])
@@ -140,12 +134,13 @@ def refund_re_match():
 def create_commit():
     contract_no = request.form.get('contract_no')
     user_id = request.form.get('user_id')
+    pay_amt = request.form.get('pay_amt')
     amount = request.form.get('amount')
-    commit = request.form.get('commit')
+    remark = request.form.get('commit')
     type = request.form.get('type')
     discount_type = request.form.get('discount_type')
     execute = DataExecute()
-    result = execute.create_commit(contract_no=contract_no,user_id=user_id,amount=amount,commit=commit,type=type,discount_type=discount_type)
+    result = execute.create_commit(contract_no,user_id,pay_amt,amount,remark,type,discount_type)
     return result
 
 #冲账
