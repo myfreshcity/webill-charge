@@ -79,6 +79,7 @@ class Contract(db.Model):
     mobile_no = db.Column(db.VARCHAR(20),default='')
     id_number = db.Column(db.VARCHAR(20),default='')
     shop = db.Column(db.VARCHAR(20),default='')
+    sale_person = db.Column(db.VARCHAR(20),default='')
     tensor = db.Column(db.Integer,default=0)
     repay_date = db.Column(db.Date)
     delay_day = db.Column(db.Integer,default=0)

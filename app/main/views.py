@@ -78,6 +78,7 @@ def get_contract_deal():
     query.page = request.form.get('page')
     query.customer = request.form.get('customer')
     query.shop = request.form.get('shop')
+    query.sale_person = request.form.get('sale_person')
     query.contract_no = request.form.get('contract_no')
     query.repay_date = request.form.get('repay_date')
     query.id_number = request.form.get('id_number')

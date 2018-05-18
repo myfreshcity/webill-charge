@@ -76,9 +76,9 @@ class FileExecute:
             # 查看表头是否正确
             columns = list(datatable.columns)
 
-            if (len(columns) - 9) % 2 == 0:
-                tensor_max = (len(columns) - 9) // 2
-                real_columns = ['合同编号', '客户姓名', '身份证号','手机号', '地区门店', '合同金额', '放款金额','放款日期', '借款期数']
+            if (len(columns) - 10) % 2 == 0:
+                tensor_max = (len(columns) - 10) // 2
+                real_columns = ['合同编号', '客户姓名', '身份证号','手机号', '地区门店','客户经理', '合同金额', '放款金额','放款日期', '借款期数']
                 for i in range(tensor_max):
                     real_columns += ['%d期应还日期' % (i + 1), '%d期应还金额' % (i + 1)]
                 if columns == real_columns:
@@ -145,6 +145,7 @@ class FileExecute:
                 contract.id_number = str(limit_table['身份证号'].values[0])
                 contract.mobile_no = str(limit_table['手机号'].values[0])
                 contract.shop = str(limit_table['地区门店'].values[0])
+                contract.sale_person = str(limit_table['客户经理'].values[0])
                 contract.contract_amount = int(limit_table['合同金额'].values[0]*100)
                 contract.loan_amount = int(limit_table['放款金额'].values[0]*100)
                 contract.tensor = int(limit_table['借款期数'].values[0])
@@ -153,7 +154,7 @@ class FileExecute:
                 db.session.add(contract)
                 db.session.flush()
 
-                tensor_max = (len(datatable.columns)-8)//2
+                tensor_max = (len(datatable.columns)-10)//2
 
                 for i in range(tensor_max):
                     deadline=limit_table['%d期应还日期' % (i + 1)].values[0]
@@ -305,9 +306,12 @@ class DataExecute:
         contract_dic['mobile_no'] = contract.mobile_no
         contract_dic['id_number'] = contract.id_number
         contract_dic['tensor'] = contract.tensor
+        contract_dic['shop'] = contract.shop
+        contract_dic['sale_person'] = contract.sale_person if contract.sale_person else ''
         contract_dic['contract_amount'] = "%u"%(contract.contract_amount/100)
         contract_dic['loan_amount'] = "%u"%(contract.loan_amount/100)
         contract_dic['loan_date'] = contract.loan_date.strftime("%Y-%m-%d")
+        contract_dic['created_time'] = contract.created_time.strftime("%Y-%m-%d %H:%M:%S")
         contract_dic['remain_sum']= "%u"%(contract.remain_sum/100)        #冲账余额
         plans = ContractRepay.query.filter(ContractRepay.contract_id == contract.id).all()
         #还款情况
@@ -709,6 +713,7 @@ class DataExecute:
         def contruct_contract_dict(contract):
             contract_dic = {}
             contract_dic['shop'] = contract.shop
+            contract_dic['sale_person'] = contract.sale_person
             contract_dic['contract_no'] = contract.contract_no
             contract_dic['contract_id'] = contract.id
             contract_dic['customer'] = contract.customer
@@ -737,6 +742,8 @@ class DataExecute:
                 query = query.filter(Contract.customer.like(convert(query_form.customer)))
             if query_form.shop:  # 门店
                 query = query.filter(Contract.shop.like(convert(query_form.shop)))
+            if query_form.sale_person:
+                query = query.filter(Contract.sale_person.like(convert(query_form.sale_person)))
             if query_form.is_dealt:  # 1为已处理，0为未处理
                 query = query.filter(Contract.is_dealt == query_form.is_dealt)
             if query_form.is_settled:  # 0、还款中；100、逾期；200、移交外催；300、结清)
