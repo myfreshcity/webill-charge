@@ -721,8 +721,12 @@ class DataExecute:
             contract_dic['contract_amount'] = "%u" % (contract.contract_amount / 100)
             contract_dic['loan_date'] = contract.loan_date.strftime('%Y-%m-%d')
             contract_dic['repay_date'] = contract.repay_date.strftime('%Y-%m-%d') if contract.repay_date else '-'
+            delay_days = None
+            if contract.repay_date:
+                delay_days = (datetime.date.today() - contract.repay_date).days
 
-            contract_dic['delay_days'] = contract.delay_day
+            contract_dic['delay_days'] = delay_days
+            contract_dic['h_delay_days'] = contract.delay_day
             contract_dic['mobile_no'] = contract.mobile_no
             contract_dic['id_number'] = contract.id_number
             contract_dic['tensor'] = contract.tensor
@@ -734,6 +738,8 @@ class DataExecute:
             return contract_dic
 
         def get_query():
+
+            today = datetime.date.today()
 
             query = Contract.query
             if query_form.contract_no:  # 合同编号
@@ -753,13 +759,13 @@ class DataExecute:
             if query_form.file_id:  # 合同文件编号
                 query = query.filter(Contract.file_id == query_form.file_id)
             if query_form.from_yu_day:
-                query = query.filter(Contract.delay_day >= int(query_form.from_yu_day))
+                f_date = today - datetime.timedelta(days=int(query_form.from_yu_day))
+                query = query.filter(Contract.repay_date <= f_date)
             if query_form.to_yu_day:
-                query = query.filter(Contract.delay_day <= int(query_form.to_yu_day))
-
-
+                t_date = today - datetime.timedelta(days=int(query_form.to_yu_day))
+                query = query.filter(Contract.repay_date >= t_date)
             if query_form.repay_date and query_form.repay_date!='null':
-                query = query.filter(Contract.repay_date <= query_form.repay_date)
+                query = query.filter(Contract.repay_date == query_form.repay_date)
             return query.order_by(Contract.loan_date.desc(),Contract.contract_no.desc())
 
         contracts = get_query().paginate(int(query_form.page), per_page=10, error_out=False)

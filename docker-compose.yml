@@ -1,0 +1,36 @@
+version: '3'
+services:
+  web:
+    networks:
+      - jaz
+    build: .
+    command: python3 manage.py runserver
+    volumes:
+      - .:/code
+      - /Users/newcity/PycharmProjects/webill-charge/celery.log:/Users/newcity/PycharmProjects/webill-charge/celery.log
+      - /Users/newcity/Uploads/:/Users/newcity/Uploads/
+    ports:
+     - "5002:5000"
+
+  mx_redis:
+      restart: always
+      networks:
+        - jaz
+      image: redis:alpine
+      expose:
+        - 6379
+      command: redis-server --appendonly yes
+
+  mx_celery:
+      restart: always
+      networks:
+        - jaz
+      build: .
+      command: celery -A app.celery worker --loglevel=info
+      volumes:
+        - /Users/newcity/PycharmProjects/webill-charge/celery.log:/Users/newcity/PycharmProjects/webill-charge/celery.log
+      depends_on:
+        - mx_redis
+
+networks:
+  jaz:
