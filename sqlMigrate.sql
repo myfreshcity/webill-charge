@@ -1,4 +1,6 @@
 
+ALTER TABLE `t_commit_info` CHANGE COLUMN `discount_type` `discount_type` int(2) DEFAULT '-1' COMMENT '减免类型:0逾期结清；1有息结清 2无息结清';
+
 ALTER TABLE `t_contract` ADD COLUMN `sale_person` varchar(20) COMMENT '客户经理' AFTER `shop`;
 
 ALTER TABLE `t_commit_info` ADD COLUMN `pay_amt` int(20) NOT NULL DEFAULT '0' COMMENT '实际支付额' AFTER `applyer`;

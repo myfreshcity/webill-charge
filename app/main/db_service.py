@@ -145,6 +145,19 @@ def syn_contract_status(contract):
         contract.repay_date = get_latest_repay_date(contract.id)
         contract.is_settled = 0  # 设置初始状态为还款中
 
+# 计算未到期利息
+def get_future_interest(contract,plans):
+    future_interest = 0  # 未到期利息
+    principal = contract.contract_amount / contract.tensor
+    today = datetime.date.today()
+    i = 0  # 未到期计数器
+    for plan in plans:
+        # 当期利息正常计算
+        if plan.deadline > today and plan.actual_amt == 0:
+            if i > 0:
+                future_interest += (plan.amt - principal)
+            i += 1
+    return future_interest
 
 # 计算每日逾期费用
 def count_daily_delay():

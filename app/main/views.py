@@ -25,7 +25,7 @@ def download_refund():
 #上传合同和还款计划书
 @main.route('/charge/plan/upload',methods=['POST','GET'])
 @TokenTest
-def plan_upload():
+def upload_plan():
     if request.method == 'GET':
         return render_template("upload.html")
     else:
@@ -40,7 +40,7 @@ def plan_upload():
 #上传还款流水表
 @main.route('/charge/refund/upload',methods=['POST','GET'])
 @TokenTest
-def refund_upload():
+def upload_refund():
     if request.method == 'GET':
         return render_template("upload.html")
     else:
@@ -115,7 +115,7 @@ def unlinked_refund():
 #还款流水重新匹配
 @main.route('/charge/refund/rematch',methods=['POST'])
 @TokenTest
-def refund_re_match():
+def rematch_refund():
     refund_id = request.form.get('refund_id')
     execute = DataExecute()
     result=  execute.refund_re_match(refund_id)
@@ -123,7 +123,7 @@ def refund_re_match():
 
 @main.route('/charge/refund/reset',methods=['POST'])
 @TokenTest
-def refund_reset():
+def reset_refund():
     refund_id = int(request.form.get('refund_id'))
     result=  do_refund_reset(refund_id)
     return result

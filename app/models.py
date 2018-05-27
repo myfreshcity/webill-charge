@@ -1,5 +1,7 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
+from sqlalchemy import func
+
 from . import db,login_manager,mdb
 from werkzeug.security import generate_password_hash,check_password_hash
 from flask_login import UserMixin
@@ -95,8 +97,8 @@ class Contract(db.Model):
     refund_plans = db.relationship("ContractRepay",backref='contract',cascade="delete, delete-orphan")
     refund = db.relationship('Repayment', backref='contract')
     commit = db.relationship('CommitInfo',backref='contract')
-    updated_time = db.Column(db.DateTime)
-    created_time = db.Column(db.DateTime,default=datetime.datetime.now())
+    updated_time = db.Column(db.DateTime,onupdate=func.now())
+    created_time = db.Column(db.DateTime,server_default=func.now())
 
     def __repr__(self):
         return "<Contract %s>"%self.contract_no
@@ -151,7 +153,7 @@ class Repayment(db.Model):
     bank = db.Column(db.VARCHAR(30))
     card_id = db.Column(db.Integer)
     t_status = db.Column(db.Integer,default=0)
-    create_time = db.Column(db.DateTime,default=datetime.datetime.now())
+    create_time = db.Column(db.DateTime,server_default=func.now())
 
     def __repr__(self):
         return "<Repayment %s>"%self.refund_name
@@ -190,7 +192,7 @@ class FundMatchLog(db.Model):
     p_remain_amt = db.Column(db.Integer,default=0)
     remark = db.Column(db.VARCHAR(2000))
     t_status = db.Column(db.Integer,default=0)
-    created_time = db.Column(db.DateTime,default=datetime.datetime.now())
+    created_time = db.Column(db.DateTime,server_default=func.now())
 
 
 

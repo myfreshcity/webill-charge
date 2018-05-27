@@ -2,10 +2,14 @@
 # -*- coding: UTF-8 -*-
 import multiprocessing
 import traceback
+
+import math
 import pandas as pd
 import xlrd
 import os,datetime,re
-from app.main.match_engine import match_by_refund, match_by_contract
+
+from app.main.db_service import get_future_interest
+from app.main.match_engine import MatchEngine
 from app.main.utils import countFee, countDelayDay, convert
 from ..models import *
 from sqlalchemy import and_
@@ -145,7 +149,8 @@ class FileExecute:
                 contract.id_number = str(limit_table['身份证号'].values[0])
                 contract.mobile_no = str(limit_table['手机号'].values[0])
                 contract.shop = str(limit_table['地区门店'].values[0])
-                contract.sale_person = str(limit_table['客户经理'].values[0])
+                sale_person = "" if pd.isna(limit_table['客户经理'].values[0]) else str(limit_table['客户经理'].values[0])
+                contract.sale_person = sale_person
                 contract.contract_amount = int(limit_table['合同金额'].values[0]*100)
                 contract.loan_amount = int(limit_table['放款金额'].values[0]*100)
                 contract.tensor = int(limit_table['借款期数'].values[0])
@@ -311,15 +316,16 @@ class DataExecute:
         contract_dic['contract_amount'] = "%u"%(contract.contract_amount/100)
         contract_dic['loan_amount'] = "%u"%(contract.loan_amount/100)
         contract_dic['loan_date'] = contract.loan_date.strftime("%Y-%m-%d")
+        contract_dic['is_settled'] = contract.is_settled
         contract_dic['created_time'] = contract.created_time.strftime("%Y-%m-%d %H:%M:%S")
-        contract_dic['remain_sum']= "%u"%(contract.remain_sum/100)        #冲账余额
+
         plans = ContractRepay.query.filter(ContractRepay.contract_id == contract.id).all()
         #还款情况
         overtime_list = []
+
         for plan in plans:
             delay_day = countDelayDay(plan)  # 逾期天数
             fee = countFee(contract.contract_amount, delay_day)
-
 
             plan_dict = {'deadline': plan.deadline.strftime("%Y-%m-%d"),
                          'amount': "%u" % (plan.amt / 100),
@@ -335,6 +341,8 @@ class DataExecute:
                          'delay_day': delay_day
                          }
             overtime_list.append(plan_dict)
+
+        contract_dic['future_interest'] = "%u" % int(get_future_interest(contract,plans) / 100)
         contract_dic['overtime_list'] = overtime_list
 
         # 协商历史
@@ -357,7 +365,8 @@ class DataExecute:
             comit_refund = {'type': commit.type, 'discount_type': commit.discount_type, 'remark': remark,
                             'apply_date': commit.apply_date.strftime("%Y-%m-%d"),
                             'apply_date': commit.apply_date.strftime("%Y-%m-%d %H:%M:%S"),
-                            'applyer': commit.applyer, 'amount': "%u" % (commit.amount/100), 'remain_amt': commit.remain_amt,
+                            'applyer': commit.applyer, 'amount': "%u" % (commit.amount/100), 'pay_amt': "%u" % (commit.pay_amt/100),
+                            'remain_amt': commit.remain_amt,
                             'approve_date': commit.approve_date.strftime(
                                 "%Y-%m-%d %H:%M:%S") if commit.approve_date else None,
                             'result': commit.result,
@@ -440,8 +449,8 @@ class DataExecute:
             commit_refund.result = 0  # 0、待审核；100、通过；200、拒绝
             commit_refund.discount_type = int(discount_type)  # 减免类型
             commit_refund.pay_amt = int(pay_amt) * 100
-            commit_refund.amount = int(amount) * 100  # 协商金额
-            commit_refund.remain_amt = int(amount) * 100  # 协商金额
+            commit_refund.amount = int(amount) * 100
+            commit_refund.remain_amt = int(amount) * 100
         if type == '2':  # 移交外催
             commit_refund.result = 100  # 0、待审核；100、通过；200、拒绝
             contract.is_settled = 200  # 合同状态==》移交外催
@@ -516,10 +525,11 @@ class DataExecute:
                          }
             overtime_list.append(plan_dict)
         commit_dict = {'isSucceed': 200, 'contract_no': contract.contract_no, 'customer': contract.customer,
-                       'loan_amount': "%u" % (contract.loan_amount / 100),
+                       'release_amount': "%u" % (contract.loan_amount / 100),'amount': "%u" % (contract.contract_amount / 100),
                        'tensor': contract.tensor, 'ovetime_list': overtime_list, 'overtime_num': len(overtime_list),
                        'overtime_sum': "%u" % (overtime_sum / 100),
                        'remain_sum': "%u" % (contract.remain_sum / 100), 'result': commit.result,
+                       'discount_type': commit.discount_type,'pay_amt': '%u' % (commit.pay_amt / 100),
                        'commit_id': commit_id, 'commit_amount': '%u' % (commit.amount / 100), 'remark': commit.remark}
         return commit_dict
 
@@ -540,7 +550,7 @@ class DataExecute:
         if commit.type == 1 :
             if commit.result == 100:
                 if commit.pay_amt == 0:
-                    result = match_by_contract(contract)
+                    result = MatchEngine().match_by_contract(contract)
                     if result:
                         return {'isSucceed': 500, 'message': result['msg']}
             elif commit.result == 200:
@@ -562,7 +572,7 @@ class DataExecute:
         if  not refund:
             return {'isSucceed': 500, 'message': '未找到有效流水'}
 
-        result = match_by_contract(contract, refund)
+        result = MatchEngine().match_by_contract(contract, refund)
         if result:
             return {'isSucceed': 500, 'message': result['msg']}
         else:
@@ -573,8 +583,9 @@ class DataExecute:
         refund = Repayment.query.filter(Repayment.id==refund_id).one()
         if refund.contract_id:
             return {'isSucceed': 500, 'message': '该还款流水已被使用'}
-        from .match_engine import match_by_refund
-        result = match_by_refund(refund)
+
+        engine = MatchEngine()
+        result = engine.match_by_refund(refund)
         if result:
             return {'isSucceed': 500, 'message': result['msg']}
         else:
@@ -702,10 +713,6 @@ class DataExecute:
         else:
             result_dic = {'isSucceed': 200, 'search_refund_list': search_refund_list, 'message': '查询还款流水成功！','num':num}
         return  result_dic
-
-    def retry_refund(self,refund_id):
-        refund = Repayment.query.filter(Repayment.id == refund_id).first()
-        return match_by_refund(refund)
 
     # 对账处理/贷款列表
     def get_deal_refund(self,query_form):
