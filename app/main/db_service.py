@@ -153,7 +153,7 @@ def get_future_interest(contract,plans):
     i = 0  # 未到期计数器
     for plan in plans:
         # 当期利息正常计算
-        if plan.deadline > today and plan.actual_amt == 0:
+        if plan.deadline > today:
             if i > 0:
                 future_interest += (plan.amt - principal)
             i += 1

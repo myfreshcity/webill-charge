@@ -29,7 +29,9 @@ pip install -r requirements.txt
    jupyter notebook
 
 Celery 启动命令
-   venv/bin/celery -A app.celery worker --loglevel=info
+   venv/bin/celery -A app.celery worker --loglevel=info --logfile=./celery.log
+
+   ps auxww | grep 'celery worker' | awk '{print $2}' | xargs kill -9
 
 
 上传文件夹赋权
