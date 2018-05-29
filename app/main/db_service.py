@@ -1,6 +1,5 @@
 import datetime
 
-from flask import current_app
 from sqlalchemy import func
 
 from app import db, app
@@ -16,9 +15,9 @@ def get_reduce_plan(contract, refund):
                                           ).order_by(CommitInfo.apply_date.desc()).first()
     if commit_plan:
         # 如果存款时间在申请当天，审批额度则有效
-        deadline_time = commit_plan.apply_date.replace(hour=23, minute=59, second=59)
+        deadline_time = commit_plan.apply_date
         fund_time = refund.refund_time if refund else commit_plan.apply_date  # 如果是事后减免取申请时间
-        if fund_time < deadline_time and commit_plan.remain_amt > 0:
+        if fund_time.date() == deadline_time.date() and commit_plan.remain_amt > 0:
             return commit_plan
     else:
         return None
@@ -146,17 +145,20 @@ def syn_contract_status(contract):
         contract.is_settled = 0  # 设置初始状态为还款中
 
 # 计算未到期利息
-def get_future_interest(contract,plans):
+def get_future_interest(contract, plans):
     future_interest = 0  # 未到期利息
-    principal = contract.contract_amount / contract.tensor
-    today = datetime.date.today()
-    i = 0  # 未到期计数器
-    for plan in plans:
-        # 当期利息正常计算
-        if plan.deadline > today:
-            if i > 0:
-                future_interest += (plan.amt - principal)
-            i += 1
+
+    if contract.prepay_type == 0:
+        principal = contract.contract_amount / contract.tensor
+        skip_index = 1 if contract.repay_type == 1 else 0  # 后付费跳过2期
+        today = datetime.date.today()
+        i = 0  # 未到期计数器
+        for plan in plans:
+            # 当期利息正常计算
+            if plan.deadline > today:
+                if i > skip_index:
+                    future_interest += (plan.amt - principal)
+                i += 1
     return future_interest
 
 # 计算每日逾期费用
@@ -194,3 +196,6 @@ def recount_fee(plan, contract):
                             plan.id, plan.delay_day, plan.fee, n_delay_day,fee)
             plan.fee = max(0, fee)  # 提前还款的直接归零
             plan.delay_day = max(0, n_delay_day)  # 提前还款的直接归零
+
+
+

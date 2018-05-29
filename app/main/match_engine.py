@@ -1,8 +1,8 @@
 import math
 
 from app import app
-from app.main.db_service import get_reduce_plan, get_refund_plan, add_match_log, syn_contract_status, recount_fee, \
-    get_future_interest
+from app.main.db_service import get_reduce_plan, get_refund_plan, get_future_interest, add_match_log, recount_fee, \
+    syn_contract_status
 from app.main.utils import MyExpection, date2datetime
 from app.models import *
 
@@ -12,57 +12,63 @@ class MatchEngine:
         self.refund = None
         self.contract = None
         self.commit_plan = None
+        self.fee_first = False  # 滞纳金优先
+        self.amount = 0  # 冲账金额
 
     # 真实流水冲帐
-    def __do_real_fund(self,contract, tplans, refund,commit_plan):
+    def __do_real_fund(self,tplans):
         # 逐期冲帐
-        app.logger.info('使用真实还款流水[%s]开始冲账,余额:%s', refund.id, refund.remain_amt)
+        app.logger.info('使用真实还款流水[%s]开始冲账,余额:%s,冲账金额%s', self.refund.id, self.refund.remain_amt,self.amount)
+        amount = self.amount
 
         #如果为多期时，先冲本息
-        if len(tplans) > 1:
+        if len(tplans) > 1 and (not self.fee_first):
             for plan in tplans:
-                self.__balance_amount(plan, refund, contract)
+                self.__balance_amount(plan)
             for plan in tplans:
-                self.__balance_fee(plan, refund, contract)
+                self.__balance_fee(plan)
         else:
             plan = tplans[0]
-            self.__balance_amount(plan, refund, contract)
-            self.__balance_fee(plan, refund, contract)
+            self.__balance_amount(plan)
+            self.__balance_fee(plan)
+
+        # 同步资金余额
+        self.refund.remain_amt = self.refund.remain_amt - (amount - self.amount)
 
 
     #冲本息
-    def __balance_amount(self,plan,refund,contract):
+    def __balance_amount(self,plan):
         ac = plan.amt - plan.actual_amt  # 计算应冲值金额
-        if ac > 0 and refund.remain_amt > 0:
-            _b = min(refund.remain_amt, ac)  # 取最小值冲账
+        if ac > 0 and self.amount > 0:
+            _b = min(self.amount, ac)  # 取最小值冲账
             plan.actual_amt += _b
-            refund.remain_amt -= _b
-            refund.contract_id = plan.contract_id
+            self.amount -= _b
+            self.refund.contract_id = plan.contract_id
             if plan.actual_amt >= plan.amt:
-                plan.settled_date = refund.refund_time
-            add_match_log(0, contract.id, plan.id, refund.id,
-                          _b, refund.remain_amt,
+                plan.settled_date = self.refund.refund_time
+            add_match_log(0, self.contract.id, plan.id, self.refund.id,
+                          _b, self.amount,
                           plan.amt - plan.actual_amt,'本息冲账')
             app.logger.info('还款流水[%s]冲还款计划[%s]本息:%s,流水余额:%s,本息余额:%s',
-                            refund.id, plan.id,
-                            _b, refund.remain_amt,
+                            self.refund.id, plan.id,
+                            _b, self.amount,
                             plan.amt - plan.actual_amt)
     #冲滞纳金
-    def __balance_fee(self,plan,refund,contract):
-        recount_fee(plan, contract)  # 重新计算滞纳金
+    def __balance_fee(self,plan):
+        recount_fee(plan, self.contract)  # 重新计算滞纳金
         fc = plan.fee - plan.actual_fee  # 计算应冲值金额
-        if fc > 0 and refund.remain_amt > 0:
-            _a = min(refund.remain_amt, fc)  # 取最小值冲账
+        if fc > 0 and self.amount > 0:
+            _a = min(self.amount, fc)  # 取最小值冲账
             plan.actual_fee += _a
-            refund.remain_amt -= _a
-            refund.contract_id = plan.contract_id
-            #plan.settled_date = refund.refund_time
-            add_match_log(1, contract.id, plan.id, refund.id,
-                          _a, refund.remain_amt,
+            self.amount -= _a
+            self.refund.contract_id = plan.contract_id
+            #plan.settled_date = self.refund.refund_time
+            add_match_log(1, self.contract.id, plan.id, self.refund.id,
+                          _a, self.amount,
                           plan.fee - plan.actual_fee,'滞纳金冲账')
             app.logger.info('还款流水[%s]冲还款计划[%s]滞纳金:%s,流水余额:%s,滞纳金余额:%s',
-                            refund.id, plan.id,
-                            _a, refund.remain_amt,
+                            self.refund.id, plan.id,
+                            _a, self.amount,
                             plan.fee - plan.actual_fee)
 
 
@@ -83,17 +89,14 @@ class MatchEngine:
     def __do_contract_refund(self,tplans):
 
         if self.refund and tplans:
-            self.__do_real_fund(self.contract, tplans, self.refund, self.commit_plan)
+            self.__do_real_fund(tplans)
 
         # 结清状态计算
         v = 0
-        fit = 0 # 未到期利息
+        fit = get_future_interest(self.contract, tplans) # 未到期利息
         flag = True
         if self.commit_plan:
             v += self.commit_plan.remain_amt
-            if self.commit_plan.discount_type == 2:
-                fit += get_future_interest(self.contract, tplans)
-
             app.logger.info('从减免计划[%s]获得减免额[%s]使用给贷款合同[%s]', self.commit_plan.id,self.commit_plan.remain_amt, self.contract.id)
             flag = self.__do_check_commit_amt(v,fit, tplans)  # 减免额是否足够
 
@@ -123,10 +126,12 @@ class MatchEngine:
 
 
     # 指定合同冲账
-    def match_by_contract(self,contract, refund=None):
+    def match_by_contract(self, contract, refund=None, fee_first=False, amount=0):
         self.contract = contract
-        if refund:
-            self.refund = refund
+        self.fee_first = fee_first
+        self.amount = amount
+        self.refund = refund
+
         app.logger.info('---合同[%s] 冲账开始---', self.contract.id)
         # 已结清的合同不应再重复处理
         if self.contract.is_settled == 300:
@@ -142,6 +147,8 @@ class MatchEngine:
                 return {'code': 5004, 'msg': '还款流水[%s]余额不足:%s' % (self.refund.id, int(self.refund.remain_amt/100))}
             if self.refund.refund_time < date2datetime(self.contract.loan_date):
                 return {'code': 5004, 'msg': '还款流水[%s]支付时间早于合同放款时间' % (self.refund.id)}
+            if self.amount > self.refund.remain_amt:
+                return {'code': 5004, 'msg': '冲账金额应小于还款流水[%s]余额:%s' % (self.refund.id, int(self.refund.remain_amt / 100))}
 
         self.commit_plan = get_reduce_plan(self.contract,self.refund)
         is_close = self.__check_close()  # 是否一次结清
@@ -195,14 +202,14 @@ class MatchEngine:
                 cl = len(contracts)
                 # 如果是单笔合同
                 if cl == 1:
-                    return self.match_by_contract(contracts[0])
+                    return self.match_by_contract(contracts[0],self.refund,False,self.refund.remain_amt)
 
                 elif cl > 1:
                     # 如果是多笔合同，先按照逾期情况处理
                     if self.refund.remain_amt > 0:
                         # 先不要处理提前还款
                         for c in contracts:
-                            r = self.match_by_contract(c)
+                            r = self.match_by_contract(c,self.refund,False,self.refund.remain_amt)
                             if r:
                                 return r
                             if self.refund.remain_amt <= 0:

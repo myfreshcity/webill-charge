@@ -1,4 +1,8 @@
 
+ALTER TABLE `t_contract` ADD COLUMN `is_out` tinyint NOT NULL DEFAULT '0' COMMENT '是否移交外催 0 无 1 有' AFTER `is_settled`;
+
+ALTER TABLE `t_contract` DROP COLUMN `remain_sum`, DROP COLUMN `refund_sum`, ADD COLUMN `repay_type` tinyint NOT NULL DEFAULT '0' COMMENT '还款类型 0:前付款 1:后付款' AFTER `loan_date`, ADD COLUMN `prepay_type` tinyint NOT NULL DEFAULT '0' COMMENT '提前还款计息 0 否 1是' AFTER `repay_type`;
+
 ALTER TABLE `t_commit_info` CHANGE COLUMN `discount_type` `discount_type` int(2) DEFAULT '-1' COMMENT '减免类型:0逾期结清；1有息结清 2无息结清';
 
 ALTER TABLE `t_contract` ADD COLUMN `sale_person` varchar(20) COMMENT '客户经理' AFTER `shop`;

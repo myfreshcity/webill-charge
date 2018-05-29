@@ -88,10 +88,11 @@ class Contract(db.Model):
     contract_amount = db.Column(db.Integer,default=0)
     loan_amount = db.Column(db.Integer,default=0)
     loan_date = db.Column(db.Date)
-    remain_sum = db.Column(db.Integer,default=0)
-    refund_sum  =db.Column(db.Integer,default=0)
+    repay_type = db.Column(db.Integer,default=0)
+    prepay_type = db.Column(db.Integer, default=0)
     is_settled = db.Column(db.Integer,default=0)
     is_dealt = db.Column(db.Integer,default=0)
+    is_out = db.Column(db.Integer,default=0)
     file_id = db.Column(db.Integer,default=0)
 
     refund_plans = db.relationship("ContractRepay",backref='contract',cascade="delete, delete-orphan")

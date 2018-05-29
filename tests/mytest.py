@@ -1,3 +1,4 @@
+import datetime
 import os, sys
 import os,http
 import requests
@@ -5,10 +6,9 @@ from flask import Flask, render_template, abort, url_for, session
 from flask_sqlalchemy import SQLAlchemy
 from flask_script import Manager, Shell
 from app import create_app,db
-from app.models import *
-from app.main.match_engine import *
-from app.main.table_data_server import *
-
+from app.main.db_service import recount_fee
+from app.main.match_engine import MatchEngine
+from app.models import Repayment, Contract, ContractRepay, CommitInfo
 
 app=create_app()
 manager=Manager(app)
@@ -47,7 +47,7 @@ def main():
 
     #reduce_001()  # 清欠
     #reduce_002()  # 结清
-    #db.session.commit()
+
 
     # 对账设置
     repayment_001()  # 导入冲账
@@ -58,16 +58,20 @@ def main():
 
 
 
+
 #导入冲账
 def repayment_001():
     refund = Repayment.query.filter(Repayment.id == '103').first()
+    amount = 300000
+
     refund.contract_id = None
     refund.t_status = 2
     refund.shop = '上海门店'
-    refund.remain_amt = 138400
+    refund.amount = amount
+    refund.remain_amt = amount
     refund.refund_time = datetime.date.today()
-    result = MatchEngine().match_by_refund(refund)
-    app.logger.warning(result)
+    #result = MatchEngine().match_by_refund(refund)
+    #app.logger.warning(result)
     #db.session.commit()
 
 
@@ -105,23 +109,16 @@ def set_cond_001():
     init_repay_plan(contract, plan3, datetime.date.today() + datetime.timedelta(days=4))
     init_repay_plan(contract, plan4, datetime.date.today() + datetime.timedelta(days=8))
 
-
-def init_repay_plan(contract,plan,deadline):
-    plan.deadline = deadline
-    plan.amt = 5000
-    recount_fee(plan, contract)
-    plan.actual_amt = 0
-    plan.actual_fee = 0
-    plan.is_settled = 0
-    plan.settled_date = None
-
-
 # 多期逾期包含减免
 def set_cond_002():
     contract = Contract.query.filter(Contract.id == '25').one()
     contract.shop = '上海门店'
     contract.contract_amount = 10000
-    contract.tensor = 3
+    contract.tensor = 4
+    contract.repay_type = 0
+    # contract.prepay_type = 1 #计算利息
+    # contract.repay_type = 1 #后付款
+
     # 重置合同状态
     contract.is_settled = 0
 
@@ -137,6 +134,15 @@ def set_cond_002():
     init_repay_plan(contract, plan4, datetime.date.today() + datetime.timedelta(days=4))
 
 
+def init_repay_plan(contract,plan,deadline):
+    plan.deadline = deadline
+    plan.amt = 5000
+    recount_fee(plan, contract)
+    plan.actual_amt = 0
+    plan.actual_fee = 0
+    plan.is_settled = 0
+    plan.settled_date = None
+
 # 清欠
 def reduce_001():
     cRefund = CommitInfo.query.filter(CommitInfo.id == '21').first()
@@ -147,8 +153,8 @@ def reduce_001():
 #结清
 def reduce_002():
     cRefund = CommitInfo.query.filter(CommitInfo.id == '21').first()
-    cRefund.remain_amt = 138400
-    cRefund.discount_type = 2
+    cRefund.remain_amt = 100
+    cRefund.discount_type = 1
     cRefund.apply_date = datetime.datetime.now()
 
 

@@ -72,7 +72,7 @@ def del_contract():
 #对账处理/贷款列表
 @main.route('/charge/contract/select',methods=['POST'])
 @TokenTest
-def get_contract_deal():
+def get_contract_select():
     execute = DataExecute()
     query = QueryForm()
     query.page = request.form.get('page')
@@ -149,8 +149,9 @@ def create_commit():
 @TokenTest
 def link_refund():
     contract_no,user_id,refund_id,contract_id = request.form.get('contract_no'),request.form.get('user_id'),request.form.get('refund_id'),request.form.get('contract_id')
-    execute = DataExecute()
-    result=  execute.link_refund_to_contract(contract_no,contract_id,refund_id)
+    fee_first = request.form.get('fee_first') == "true"
+    amount = int(request.form.get('amount'))*100
+    result=  DataExecute().link_refund_to_contract(contract_no, contract_id, refund_id,fee_first,amount)
     return result
 
 #对账审核
