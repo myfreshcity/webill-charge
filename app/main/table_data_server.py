@@ -575,7 +575,7 @@ class DataExecute:
         if not refund:
             return {'isSucceed': 500, 'message': '未找到有效流水'}
 
-        result = MatchEngine().match_by_contract(contract, refund, fee_first, amount)
+        result = MatchEngine().match_by_contract(contract, refund, fee_first, amount, True)
         if result:
             return {'isSucceed': 500, 'message': result['msg']}
         else:
@@ -707,7 +707,7 @@ class DataExecute:
                 query = query.filter(Contract.repay_date >= t_date)
             if query_form.repay_date and query_form.repay_date!='null':
                 query = query.filter(Contract.repay_date == query_form.repay_date)
-            return query.order_by(Contract.loan_date.desc(),Contract.contract_no.desc())
+            return query.order_by(Contract.repay_date.desc(),Contract.contract_no.desc())
 
         contracts = get_query().paginate(int(query_form.page), per_page=10, error_out=False)
         page_contracts = contracts.items

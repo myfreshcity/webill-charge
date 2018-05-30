@@ -187,15 +187,13 @@ def count_daily_delay():
 
 # 重新计算滞纳金
 def recount_fee(plan, contract):
-    if plan.actual_amt >= plan.amt:  # 仅对还清本息的还款计划有效
-        n_delay_day = countDelayDay(plan)  # 逾期天数
-        if n_delay_day != plan.delay_day:
-            fee = countFee(contract.contract_amount, n_delay_day)
-
-            app.logger.info('调整还款计划[%s]逾期天数:%s，滞纳金:%s,为逾期天数:%s，滞纳金:%s',
-                            plan.id, plan.delay_day, plan.fee, n_delay_day,fee)
-            plan.fee = max(0, fee)  # 提前还款的直接归零
-            plan.delay_day = max(0, n_delay_day)  # 提前还款的直接归零
+    n_delay_day = countDelayDay(plan)  # 逾期天数
+    if n_delay_day != plan.delay_day:
+        fee = countFee(contract.contract_amount, n_delay_day)
+        app.logger.info('调整还款计划[%s]逾期天数:%s，滞纳金:%s,为逾期天数:%s，滞纳金:%s',
+                        plan.id, plan.delay_day, plan.fee, n_delay_day,fee)
+        plan.fee = max(0, fee)  # 提前还款的直接归零
+        plan.delay_day = max(0, n_delay_day)  # 提前还款的直接归零
 
 
 

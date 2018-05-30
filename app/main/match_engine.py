@@ -14,6 +14,8 @@ class MatchEngine:
         self.commit_plan = None
         self.fee_first = False  # 滞纳金优先
         self.amount = 0  # 冲账金额
+        self.match_type = 1 # 冲账类型 0 结清 1 清欠 2 提前还款
+        self.is_partion_match = False # 余额不足时是否冲账
 
     # 真实流水冲帐
     def __do_real_fund(self,tplans):
@@ -21,16 +23,25 @@ class MatchEngine:
         app.logger.info('使用真实还款流水[%s]开始冲账,余额:%s,冲账金额%s', self.refund.id, self.refund.remain_amt,self.amount)
         amount = self.amount
 
-        #如果为多期时，先冲本息
-        if len(tplans) > 1 and (not self.fee_first):
+        if self.match_type == 0: # 结清
             for plan in tplans:
                 self.__balance_amount(plan)
             for plan in tplans:
                 self.__balance_fee(plan)
-        else:
-            plan = tplans[0]
-            self.__balance_amount(plan)
-            self.__balance_fee(plan)
+        elif self.match_type == 1: # 清欠
+            if self.fee_first:
+                for plan in tplans:
+                    self.__balance_amount(plan)
+                    self.__balance_fee(plan)
+            else:
+                for plan in tplans:
+                    self.__balance_amount(plan)
+                for plan in tplans:
+                    self.__balance_fee(plan)
+        elif self.match_type == 2: # 提前还款
+            for plan in tplans:
+                if self.amount >= plan.amt - plan.actual_amt or self.is_partion_match:
+                    self.__balance_amount(plan)
 
         # 同步资金余额
         self.refund.remain_amt = self.refund.remain_amt - (amount - self.amount)
@@ -126,11 +137,12 @@ class MatchEngine:
 
 
     # 指定合同冲账
-    def match_by_contract(self, contract, refund=None, fee_first=False, amount=0):
+    def match_by_contract(self, contract, refund=None, fee_first=False, amount=0,is_partion_match=False):
         self.contract = contract
         self.fee_first = fee_first
         self.amount = amount
         self.refund = refund
+        self.is_partion_match = is_partion_match
 
         app.logger.info('---合同[%s] 冲账开始---', self.contract.id)
         # 已结清的合同不应再重复处理
@@ -154,11 +166,14 @@ class MatchEngine:
         is_close = self.__check_close()  # 是否一次结清
 
         if is_close:
+            self.match_type = 0
             plans = get_refund_plan(self.contract.id)
         else:
             # 先按照逾期还款，否则按照提前还款
+            self.match_type = 1
             plans = get_refund_plan(self.contract.id, 1, self.refund)
             if not plans:
+                self.match_type = 2
                 plans = get_refund_plan(self.contract.id, 2, self.refund)
 
         try:
