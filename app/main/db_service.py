@@ -4,23 +4,9 @@ from sqlalchemy import func
 
 from app import db, app
 from app.main.utils import countFee, countDelayDay, MyExpection
-from app.models import CommitInfo, ContractRepay, FundMatchLog, Contract, Repayment
+from app.models import ContractRepay, FundMatchLog, Contract, Repayment
 
 
-# 获取有效减免审批建议
-def get_reduce_plan(contract, refund):
-    commit_plan = CommitInfo.query.filter(CommitInfo.contract_id == contract.id,
-                                          CommitInfo.type == 1,
-                                          CommitInfo.result == 100
-                                          ).order_by(CommitInfo.apply_date.desc()).first()
-    if commit_plan:
-        # 如果存款时间在申请当天，审批额度则有效
-        deadline_time = commit_plan.apply_date
-        fund_time = refund.refund_time if refund else commit_plan.apply_date  # 如果是事后减免取申请时间
-        if fund_time.date() == deadline_time.date() and commit_plan.remain_amt > 0:
-            return commit_plan
-    else:
-        return None
 
 # 获取未还清还款计划 0:全部 1:仅逾期 2:仅未到期
 def get_refund_plan(contract_id, flag=0, refund=None):
@@ -144,22 +130,25 @@ def syn_contract_status(contract):
         contract.repay_date = get_latest_repay_date(contract.id)
         contract.is_settled = 0  # 设置初始状态为还款中
 
-# 计算未到期利息
-def get_future_interest(contract, plans):
-    future_interest = 0  # 未到期利息
+# 计算未到期费差
+def get_future_offset(contract):
+    i = 0
+    expect_amount = 0  # 未到期应付
+    done_amount = 0  # 未到期已付
 
-    if contract.prepay_type == 0:
-        principal = contract.contract_amount / contract.tensor
-        skip_index = 1 if contract.repay_type == 1 else 0  # 后付费跳过2期
-        today = datetime.date.today()
-        i = 0  # 未到期计数器
-        for plan in plans:
-            # 当期利息正常计算
-            if plan.deadline > today:
-                if i > skip_index:
-                    future_interest += (plan.amt - principal)
-                i += 1
-    return future_interest
+    principal = contract.contract_amount / contract.tensor
+    today = datetime.date.today()
+    plans = ContractRepay.query.filter(ContractRepay.contract_id == contract.id,
+                                       ContractRepay.deadline >= today).all()
+    for plan in plans:
+        done_amount += (plan.actual_amt + plan.actual_fee)
+        if i > 0 and contract.prepay_type == 0:
+            expect_amount += principal
+        else:
+            expect_amount += plan.amt
+        i += 1
+
+    return max(0, expect_amount - done_amount)
 
 # 计算每日逾期费用
 def count_daily_delay():

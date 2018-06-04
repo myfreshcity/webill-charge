@@ -2,7 +2,7 @@ import datetime
 import unittest
 
 from app import create_app
-from app.main.db_service import recount_fee
+from app.main.db_service import recount_fee, get_latest_repay_date
 from app.main.match_engine import MatchEngine
 from app.models import Repayment, Contract, ContractRepay, CommitInfo
 
@@ -26,8 +26,8 @@ class MyTest(unittest.TestCase):  # 继承unittest.TestCase
         self.plan3 = ContractRepay.query.filter(ContractRepay.id == '51').first()
         self.plan4 = ContractRepay.query.filter(ContractRepay.id == '52').first()
 
-        self.cRefund = CommitInfo.query.filter(CommitInfo.id == '21').first()
-        self.cRefund.remain_amt = 0
+        self.comInfo = CommitInfo.query.filter(CommitInfo.id == '21').first()
+        self.comInfo.remain_amt = 0
 
         self.refund = Repayment.query.filter(Repayment.id == '103').first()
         self.refund.contract_id = None
@@ -48,29 +48,6 @@ class MyTest(unittest.TestCase):  # 继承unittest.TestCase
         app.debug = True
         ctx = app.app_context()
         ctx.push()
-
-    # 导入冲账
-    def repayment_001(self):
-        refund = Repayment.query.filter(Repayment.id == '103').first()
-        amount = 300000
-
-        refund.contract_id = None
-        refund.t_status = 2
-        refund.shop = '上海门店'
-        refund.amount = amount
-        refund.remain_amt = amount
-        refund.refund_time = datetime.date.today()
-        # result = MatchEngine().match_by_refund(refund)
-        # app.logger.warning(result)
-        # db.session.commit()
-
-    # 多期逾期
-    def set_cond_002(self):
-        # 重置还款计划
-        self.init_repay_plan(self.plan, datetime.date.today() - datetime.timedelta(days=4))
-        self.init_repay_plan(self.plan2, datetime.date.today() - datetime.timedelta(days=2))
-        self.init_repay_plan(self.plan3, datetime.date.today() + datetime.timedelta(days=1))
-        self.init_repay_plan(self.plan4, datetime.date.today() + datetime.timedelta(days=4))
 
     def init_repay_plan(self,plan, deadline):
         plan.deadline = deadline
@@ -94,6 +71,7 @@ class MyTest(unittest.TestCase):  # 继承unittest.TestCase
         self.init_repay_plan(self.plan2, datetime.date.today() + datetime.timedelta(days=2))
         self.init_repay_plan(self.plan3, datetime.date.today() + datetime.timedelta(days=4))
         self.init_repay_plan(self.plan4, datetime.date.today() + datetime.timedelta(days=8))
+        self.contract.repay_date = get_latest_repay_date(self.contract.id)
 
         self.init_repayment(50, datetime.datetime.now())
         result = MatchEngine().match_by_refund(self.refund)
@@ -108,6 +86,7 @@ class MyTest(unittest.TestCase):  # 继承unittest.TestCase
         self.init_repay_plan(self.plan2, datetime.date.today() + datetime.timedelta(days=2))
         self.init_repay_plan(self.plan3, datetime.date.today() + datetime.timedelta(days=4))
         self.init_repay_plan(self.plan4, datetime.date.today() + datetime.timedelta(days=8))
+        self.contract.repay_date = get_latest_repay_date(self.contract.id)
 
         self.init_repayment(51, datetime.datetime.now())
         result = MatchEngine().match_by_refund(self.refund)
@@ -121,10 +100,11 @@ class MyTest(unittest.TestCase):  # 继承unittest.TestCase
         self.init_repay_plan(self.plan2, datetime.date.today() - datetime.timedelta(days=1))
         self.init_repay_plan(self.plan3, datetime.date.today() + datetime.timedelta(days=4))
         self.init_repay_plan(self.plan4, datetime.date.today() + datetime.timedelta(days=8))
+        self.contract.repay_date = get_latest_repay_date(self.contract.id)
 
-        self.cRefund.remain_amt = 65*100
-        self.cRefund.discount_type = 1
-        self.cRefund.apply_date = datetime.datetime.now()
+        self.comInfo.remain_amt = 65*100
+        self.comInfo.discount_type = 1
+        self.comInfo.apply_date = datetime.datetime.now()
 
         self.init_repayment(710, datetime.datetime.now())
         result = MatchEngine().match_by_refund(self.refund)
@@ -137,10 +117,11 @@ class MyTest(unittest.TestCase):  # 继承unittest.TestCase
         self.init_repay_plan(self.plan2, datetime.date.today() - datetime.timedelta(days=1))
         self.init_repay_plan(self.plan3, datetime.date.today() + datetime.timedelta(days=4))
         self.init_repay_plan(self.plan4, datetime.date.today() + datetime.timedelta(days=8))
+        self.contract.repay_date = get_latest_repay_date(self.contract.id)
 
-        self.cRefund.remain_amt = 100*100
-        self.cRefund.discount_type = 0
-        self.cRefund.apply_date = datetime.datetime.now()
+        self.comInfo.remain_amt = 100*100
+        self.comInfo.discount_type = 0
+        self.comInfo.apply_date = datetime.datetime.now()
 
         self.init_repayment(600, datetime.datetime.now())
         result = MatchEngine().match_by_refund(self.refund)
@@ -157,6 +138,7 @@ class MyTest(unittest.TestCase):  # 继承unittest.TestCase
         self.init_repay_plan(self.plan2, datetime.date.today() - datetime.timedelta(days=1))
         self.init_repay_plan(self.plan3, datetime.date.today() + datetime.timedelta(days=4))
         self.init_repay_plan(self.plan4, datetime.date.today() + datetime.timedelta(days=8))
+        self.contract.repay_date = get_latest_repay_date(self.contract.id)
 
         self.init_repayment(500, datetime.datetime.now())
         result = MatchEngine().match_by_contract(self.contract, self.refund,False,150*100)
@@ -171,6 +153,7 @@ class MyTest(unittest.TestCase):  # 继承unittest.TestCase
         self.init_repay_plan(self.plan2, datetime.date.today() - datetime.timedelta(days=1))
         self.init_repay_plan(self.plan3, datetime.date.today() + datetime.timedelta(days=4))
         self.init_repay_plan(self.plan4, datetime.date.today() + datetime.timedelta(days=8))
+        self.contract.repay_date = get_latest_repay_date(self.contract.id)
 
         self.init_repayment(500, datetime.datetime.now())
         result = MatchEngine().match_by_contract(self.contract, self.refund, True, 150 * 100)
@@ -185,6 +168,7 @@ class MyTest(unittest.TestCase):  # 继承unittest.TestCase
         self.init_repay_plan(self.plan2, datetime.date.today() + datetime.timedelta(days=2))
         self.init_repay_plan(self.plan3, datetime.date.today() + datetime.timedelta(days=4))
         self.init_repay_plan(self.plan4, datetime.date.today() + datetime.timedelta(days=8))
+        self.contract.repay_date = get_latest_repay_date(self.contract.id)
 
         self.init_repayment(500, datetime.datetime.now())
         result = MatchEngine().match_by_contract(self.contract, self.refund, True, 100 * 100,True)
@@ -198,31 +182,87 @@ class MyTest(unittest.TestCase):  # 继承unittest.TestCase
         self.init_repay_plan(self.plan2, datetime.date.today() - datetime.timedelta(days=1))
         self.init_repay_plan(self.plan3, datetime.date.today() + datetime.timedelta(days=4))
         self.init_repay_plan(self.plan4, datetime.date.today() + datetime.timedelta(days=8))
+        self.contract.repay_date = get_latest_repay_date(self.contract.id)
 
         self.init_repayment(600, datetime.datetime.now())
         MatchEngine().match_by_refund(self.refund)
 
-        self.cRefund.remain_amt = 175 * 100
-        self.cRefund.discount_type = 1
-        self.cRefund.apply_date = datetime.datetime.now()
+        self.comInfo.remain_amt = 175 * 100
+        self.comInfo.discount_type = 1
+        self.comInfo.apply_date = datetime.datetime.now()
         result = MatchEngine().match_by_contract(self.contract)
 
         self.assertEqual(result, None)
         self.assertEqual(self.contract.is_settled, 300)
 
-    # 结余还款后，再减免
+    # 提前还款分次结清
     def test_0071(self):
         self.init_repay_plan(self.plan, datetime.date.today() + datetime.timedelta(days=1))
         self.init_repay_plan(self.plan2, datetime.date.today() + datetime.timedelta(days=2))
         self.init_repay_plan(self.plan3, datetime.date.today() + datetime.timedelta(days=4))
         self.init_repay_plan(self.plan4, datetime.date.today() + datetime.timedelta(days=8))
+        self.contract.repay_date = get_latest_repay_date(self.contract.id)
+
+        self.init_repayment(51, datetime.datetime.now())
+        MatchEngine().match_by_refund(self.refund)
+        self.assertEqual(self.refund.remain_amt, 1*100)
+
+        MatchEngine().match_by_contract(self.contract, self.refund, True, 1 * 100, True)
+        self.assertEqual(self.refund.remain_amt, 0 * 100)
+
+        self.init_repayment(76, datetime.datetime.now())
+        MatchEngine().match_by_contract(self.contract, self.refund, True, 76 * 100, True)
+
+
+        self.comInfo.remain_amt = 0 * 100
+        self.comInfo.discount_type = 1
+        self.comInfo.apply_date = datetime.datetime.now() + datetime.timedelta(days=8)
+        result = MatchEngine().match_by_contract(self.contract)
+
+        self.assertEqual(result, None)
+        self.assertEqual(self.contract.is_settled, 300)
+
+    # 提前还款一次结清
+    def test_0072(self):
+        self.init_repay_plan(self.plan, datetime.date.today() + datetime.timedelta(days=1))
+        self.init_repay_plan(self.plan2, datetime.date.today() + datetime.timedelta(days=2))
+        self.init_repay_plan(self.plan3, datetime.date.today() + datetime.timedelta(days=4))
+        self.init_repay_plan(self.plan4, datetime.date.today() + datetime.timedelta(days=8))
+        self.contract.repay_date = get_latest_repay_date(self.contract.id)
 
         self.init_repayment(125, datetime.datetime.now())
         MatchEngine().match_by_refund(self.refund)
 
-        self.cRefund.remain_amt = 25 * 100
-        self.cRefund.discount_type = 1
-        self.cRefund.apply_date = datetime.datetime.now()
+        MatchEngine().match_by_contract(self.contract, self.refund, True, 25 * 100, True)
+
+        # 补一个期后减免
+        self.comInfo.remain_amt = 0 * 100
+        self.comInfo.discount_type = 1
+        self.comInfo.apply_date = datetime.datetime.now()+ datetime.timedelta(days=8)
+        result = MatchEngine().match_by_contract(self.contract)
+
+        self.assertEqual(result, None)
+        self.assertEqual(self.refund.remain_amt, 0*100)
+        self.assertEqual(self.contract.is_settled, 300)
+
+
+    # 期后减免结清
+    def test_0073(self):
+        self.init_repay_plan(self.plan, datetime.date.today() + datetime.timedelta(days=1))
+        self.init_repay_plan(self.plan2, datetime.date.today() + datetime.timedelta(days=2))
+        self.init_repay_plan(self.plan3, datetime.date.today() + datetime.timedelta(days=4))
+        self.init_repay_plan(self.plan4, datetime.date.today() + datetime.timedelta(days=8))
+        self.contract.repay_date = get_latest_repay_date(self.contract.id)
+
+        self.init_repayment(120, datetime.datetime.now())
+        MatchEngine().match_by_refund(self.refund)
+        self.assertEqual(self.refund.remain_amt, 20*100)
+
+        MatchEngine().match_by_contract(self.contract, self.refund, True, 20 * 100, True)
+
+        self.comInfo.remain_amt = 5 * 100
+        self.comInfo.discount_type = 1
+        self.comInfo.apply_date = datetime.datetime.now()
         result = MatchEngine().match_by_contract(self.contract)
 
         self.assertEqual(result, None)

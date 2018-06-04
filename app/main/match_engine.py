@@ -1,10 +1,11 @@
 import math
 
 from app import app
-from app.main.db_service import get_reduce_plan, get_refund_plan, get_future_interest, add_match_log, recount_fee, \
-    syn_contract_status
+from app.main.db_service import get_refund_plan, get_future_offset, add_match_log, recount_fee, \
+    syn_contract_status, get_future_offset
 from app.main.utils import MyExpection, date2datetime
 from app.models import *
+from app.models import CommitInfo
 
 
 class MatchEngine:
@@ -83,48 +84,57 @@ class MatchEngine:
                             plan.fee - plan.actual_fee)
 
 
-    def __do_check_commit_amt(self,reduce_amt,fit, tplans):
+    def __do_check_commit_amt(self,reduce_amt,tplans):
         i = 0
         for plan in tplans:
             offV = plan.amt + plan.fee - plan.actual_amt - plan.actual_fee
             i += offV
-        if reduce_amt+fit >= i:
-            self.commit_plan.remain_amt = 0
-            return True
-        else:
-            app.logger.info('减免额度不足，至少需要[%s]', i-fit)
-            raise MyExpection('减免额度不足，至少需要[%s]' % math.ceil((i-fit) / 100))
+        if reduce_amt < i:
+            app.logger.info('减免额度不足，至少需要[%s]', i)
+            raise MyExpection('减免额度不足，至少需要[%s]' % math.ceil((i) / 100))
 
 
     # 按照还款情况单笔冲账
     def __do_contract_refund(self,tplans):
-
         if self.refund and tplans:
             self.__do_real_fund(tplans)
 
         # 结清状态计算
         v = 0
-        fit = get_future_interest(self.contract, tplans) # 未到期利息
-        flag = True
         if self.commit_plan:
             v += self.commit_plan.remain_amt
+            self.commit_plan.remain_amt = 0  # 减免额度只用一次
             app.logger.info('从减免计划[%s]获得减免额[%s]使用给贷款合同[%s]', self.commit_plan.id,self.commit_plan.remain_amt, self.contract.id)
-            flag = self.__do_check_commit_amt(v,fit, tplans)  # 减免额是否足够
 
-        if flag:
-            v = v + fit
+        if self.match_type == 0:  # 结清时算总账
+            if v >= get_future_offset(self.contract):
+                for plan in tplans:
+                    self.__do_close(plan)
+            else:
+                raise MyExpection('结清时，付款额度不足')
+
+        else: # 逾期还款或提前还款时算分账
+            # 校验减免额度
+            if self.commit_plan:
+                self.__do_check_commit_amt(v, tplans)
+
             for plan in tplans:
                 offV = plan.amt + plan.fee - plan.actual_amt - plan.actual_fee
                 if v - offV >= 0:
-                    plan.is_settled = 1
-                    app.logger.info('还款计划[%s]已结清', plan.id)
-                    if self.commit_plan:
-                        rfid = self.refund.id if self.refund else None
-                        add_match_log(3, self.contract.id, plan.id, rfid,0, 0,0, '使用减免:%s' % (self.commit_plan.id))
+                    self.__do_close(plan)
                 v -= offV
 
         # 同步合同状态
         syn_contract_status(self.contract)
+
+    # 设置结清
+    def __do_close(self,plan):
+        plan.is_settled = 1
+        app.logger.info('还款计划[%s]已结清', plan.id)
+        if self.commit_plan:
+            rfid = self.refund.id if self.refund else None
+            add_match_log(3, self.contract.id, plan.id, rfid, 0, 0, 0,
+                          '使用减免:%s' % (self.commit_plan.id))
 
 
     # 是否一次结清
@@ -136,6 +146,8 @@ class MatchEngine:
         return is_close
 
 
+
+
     # 指定合同冲账
     def match_by_contract(self, contract, refund=None, fee_first=False, amount=0,is_partion_match=False):
         self.contract = contract
@@ -144,7 +156,7 @@ class MatchEngine:
         self.refund = refund
         self.is_partion_match = is_partion_match
 
-        app.logger.info('---合同[%s] 冲账开始---', self.contract.id)
+        app.logger.info('####合同[%s] 冲账开始####', self.contract.id)
         # 已结清的合同不应再重复处理
         if self.contract.is_settled == 300:
             app.logger.info('贷款合同[%s]已结清，略过', self.contract.id)
@@ -162,7 +174,7 @@ class MatchEngine:
             if self.amount > self.refund.remain_amt:
                 return {'code': 5004, 'msg': '冲账金额应小于还款流水[%s]余额:%s' % (self.refund.id, int(self.refund.remain_amt / 100))}
 
-        self.commit_plan = get_reduce_plan(self.contract,self.refund)
+        self.commit_plan = self.__get_reduce_plan()
         is_close = self.__check_close()  # 是否一次结清
 
         if is_close:
@@ -187,12 +199,12 @@ class MatchEngine:
             self.refund.t_status = 1 if self.refund.contract_id else 2
 
         db.session.commit()
-        app.logger.info('---合同[%s] 冲账结束---', self.contract.id)
+        app.logger.info('####合同[%s] 冲账结束####', self.contract.id)
 
     # 指定还款流水冲账
     def match_by_refund(self, refund):
         self.refund = refund
-        app.logger.info('---还款流水[%s] 冲账开始---', self.refund.id)
+        app.logger.info('指定还款流水[%s] 冲账...', self.refund.id)
         # 初始化流水状态
         self.refund.t_status = 2
         db.session.commit()
@@ -245,7 +257,19 @@ class MatchEngine:
                                               ).all()
         return commit_plan
 
-
-
-
+    # 获取有效减免审批建议
+    def __get_reduce_plan(self):
+        commit_plan = CommitInfo.query.filter(CommitInfo.contract_id == self.contract.id,
+                                              CommitInfo.type == 1,
+                                              CommitInfo.result == 100
+                                              ).order_by(CommitInfo.apply_date.desc()).first()
+        if commit_plan:
+            deadline_time = commit_plan.apply_date
+            if self.refund:  # 如果存款时间在申请当天，审批额度则有效
+                if self.refund.refund_time.date() == deadline_time.date() or self.is_partion_match:
+                    return commit_plan if commit_plan.remain_amt > 0 else None
+            else:  # 如果是付后减免取申请时间
+                return commit_plan
+        else:
+            return None
 

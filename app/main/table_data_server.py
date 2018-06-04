@@ -3,10 +3,11 @@
 import os
 import traceback
 
+import math
 import pandas as pd
 from sqlalchemy import and_
 
-from app.main.db_service import get_future_interest
+from app.main.db_service import get_future_offset
 from app.main.match_engine import MatchEngine
 from app.main.utils import countFee, countDelayDay, convert
 from .utils import DateStrToDate
@@ -349,7 +350,7 @@ class DataExecute:
                          }
             overtime_list.append(plan_dict)
 
-        contract_dic['future_interest'] = "%u" % int(get_future_interest(contract,plans) / 100)
+        contract_dic['future_interest'] = "%u" % math.ceil(get_future_offset(contract) / 100)
         contract_dic['overtime_list'] = overtime_list
 
         # 协商历史
@@ -421,7 +422,7 @@ class DataExecute:
         if customer:
             unlinked_refunds = unlinked_refunds.filter(Repayment.refund_name.like(convert(customer)))
 
-        unlinked_refunds = unlinked_refunds.paginate(int(page), per_page=10, error_out=False)
+        unlinked_refunds = unlinked_refunds.order_by(Repayment.id.desc()).paginate(int(page), per_page=10, error_out=False)
         page_refunds = unlinked_refunds.items
         num = unlinked_refunds.total
         unlinked_list = []
@@ -626,7 +627,7 @@ class DataExecute:
                 end_date = DateStrToDate(refund_time, 23, 59, 59)
                 query = query.filter(Repayment.refund_time.between(start_date, end_date))
 
-            return query.order_by(Repayment.create_time.desc(),Repayment.refund_time.desc())
+            return query.order_by(Repayment.create_time.desc(),Repayment.refund_time.desc(),Repayment.id.desc())
 
         pagination = get_query().paginate(int(page), per_page=10, error_out=False)
         page_refunds = pagination.items
@@ -707,7 +708,7 @@ class DataExecute:
                 query = query.filter(Contract.repay_date >= t_date)
             if query_form.repay_date and query_form.repay_date!='null':
                 query = query.filter(Contract.repay_date == query_form.repay_date)
-            return query.order_by(Contract.repay_date.desc(),Contract.contract_no.desc())
+            return query.order_by(Contract.repay_date.desc(),Contract.contract_no.desc(),Contract.id.desc())
 
         contracts = get_query().paginate(int(query_form.page), per_page=10, error_out=False)
         page_contracts = contracts.items
