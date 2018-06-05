@@ -91,6 +91,8 @@ class MatchEngine:
             i += offV
         if reduce_amt < i:
             app.logger.info('减免额度不足，至少需要[%s]', i)
+        else:
+            self.commit_plan.remain_amt = 0  # 减免额度只用一次
 
 
     # 按照还款情况单笔冲账
@@ -102,15 +104,14 @@ class MatchEngine:
         v = 0
         if self.commit_plan:
             v += self.commit_plan.remain_amt
-            self.commit_plan.remain_amt = 0  # 减免额度只用一次
             app.logger.info('从减免计划[%s]获得减免额[%s]使用给贷款合同[%s]', self.commit_plan.id,self.commit_plan.remain_amt, self.contract.id)
 
         if self.match_type == 0:  # 结清时算总账
             if v >= get_future_offset(self.contract):
+                self.commit_plan.remain_amt = 0  # 减免额度只用一次
                 for plan in tplans:
                     self.__do_close(plan)
-            else:
-                raise MyExpection('结清时，付款额度不足')
+
 
         else: # 逾期还款或提前还款时算分账
             # 校验减免额度

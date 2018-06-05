@@ -362,9 +362,9 @@ class DataExecute:
             if commit.type==1:
                 remark =''
                 if commit.remark:
-                    remark = '减免申请：%s；'%(commit.remark)
+                    remark = '%s' % (commit.remark)
                 if  commit.approve_remark:
-                    remark = remark + '审批意见：%s' % (commit.approve_remark)
+                    remark = remark + ' <= %s' % (commit.approve_remark)
             else:
                 if commit.remark:
                     remark = '操作备注：'+ commit.remark
