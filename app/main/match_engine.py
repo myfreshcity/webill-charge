@@ -91,7 +91,6 @@ class MatchEngine:
             i += offV
         if reduce_amt < i:
             app.logger.info('减免额度不足，至少需要[%s]', i)
-            raise MyExpection('减免额度不足，至少需要[%s]' % math.ceil((i) / 100))
 
 
     # 按照还款情况单笔冲账
