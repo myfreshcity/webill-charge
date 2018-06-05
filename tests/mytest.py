@@ -28,6 +28,8 @@ class MyTest(unittest.TestCase):  # 继承unittest.TestCase
 
         self.comInfo = CommitInfo.query.filter(CommitInfo.id == '21').first()
         self.comInfo.remain_amt = 0
+        self.comInfo.is_valid = 0
+        self.comInfo.result = 200
 
         self.refund = Repayment.query.filter(Repayment.id == '103').first()
         self.refund.contract_id = None
@@ -105,6 +107,7 @@ class MyTest(unittest.TestCase):  # 继承unittest.TestCase
         self.comInfo.remain_amt = 65*100
         self.comInfo.discount_type = 1
         self.comInfo.apply_date = datetime.datetime.now()
+        self.comInfo.result = 100
 
         self.init_repayment(710, datetime.datetime.now())
         result = MatchEngine().match_by_refund(self.refund)
@@ -122,6 +125,7 @@ class MyTest(unittest.TestCase):  # 继承unittest.TestCase
         self.comInfo.remain_amt = 100*100
         self.comInfo.discount_type = 0
         self.comInfo.apply_date = datetime.datetime.now()
+        self.comInfo.result = 100
 
         self.init_repayment(600, datetime.datetime.now())
         result = MatchEngine().match_by_refund(self.refund)
@@ -190,6 +194,8 @@ class MyTest(unittest.TestCase):  # 继承unittest.TestCase
         self.comInfo.remain_amt = 175 * 100
         self.comInfo.discount_type = 1
         self.comInfo.apply_date = datetime.datetime.now()
+        self.comInfo.result = 100
+
         result = MatchEngine().match_by_contract(self.contract)
 
         self.assertEqual(result, None)
@@ -217,6 +223,8 @@ class MyTest(unittest.TestCase):  # 继承unittest.TestCase
         self.comInfo.remain_amt = 0 * 100
         self.comInfo.discount_type = 1
         self.comInfo.apply_date = datetime.datetime.now() + datetime.timedelta(days=8)
+        self.comInfo.result = 100
+
         result = MatchEngine().match_by_contract(self.contract)
 
         self.assertEqual(result, None)
@@ -239,6 +247,8 @@ class MyTest(unittest.TestCase):  # 继承unittest.TestCase
         self.comInfo.remain_amt = 0 * 100
         self.comInfo.discount_type = 1
         self.comInfo.apply_date = datetime.datetime.now()+ datetime.timedelta(days=8)
+        self.comInfo.result = 100
+
         result = MatchEngine().match_by_contract(self.contract)
 
         self.assertEqual(result, None)
@@ -263,7 +273,28 @@ class MyTest(unittest.TestCase):  # 继承unittest.TestCase
         self.comInfo.remain_amt = 5 * 100
         self.comInfo.discount_type = 1
         self.comInfo.apply_date = datetime.datetime.now()
+        self.comInfo.result = 100
+
         result = MatchEngine().match_by_contract(self.contract)
+
+        self.assertEqual(result, None)
+        self.assertEqual(self.contract.is_settled, 300)
+
+    # 提前减免,一次结清
+    def test_0074(self):
+        self.init_repay_plan(self.plan, datetime.date.today() - datetime.timedelta(days=1))
+        self.init_repay_plan(self.plan2, datetime.date.today() + datetime.timedelta(days=2))
+        self.init_repay_plan(self.plan3, datetime.date.today() + datetime.timedelta(days=4))
+        self.init_repay_plan(self.plan4, datetime.date.today() + datetime.timedelta(days=8))
+        self.contract.repay_date = get_latest_repay_date(self.contract.id)
+
+        self.comInfo.remain_amt = 0 * 100
+        self.comInfo.discount_type = 1
+        self.comInfo.apply_date = datetime.datetime.now()
+        self.comInfo.result = 100
+
+        self.init_repayment(350, datetime.datetime.now())
+        result = MatchEngine().match_by_refund(self.refund)
 
         self.assertEqual(result, None)
         self.assertEqual(self.contract.is_settled, 300)

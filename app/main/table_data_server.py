@@ -375,6 +375,7 @@ class DataExecute:
                             'apply_date': commit.apply_date.strftime("%Y-%m-%d %H:%M:%S"),
                             'applyer': commit.applyer, 'amount': "%u" % (commit.amount/100), 'pay_amt': "%u" % (commit.pay_amt/100),
                             'remain_amt': commit.remain_amt,
+                            'is_valid': commit.is_valid,
                             'approve_date': commit.approve_date.strftime(
                                 "%Y-%m-%d %H:%M:%S") if commit.approve_date else None,
                             'result': commit.result,
@@ -454,19 +455,15 @@ class DataExecute:
         commit_refund.applyer = int(user_id)
         commit_refund.is_valid = 0  # 0、有效；-1；无效
         if type == '1':  # 申请减免
-            commit_refund.result = 0  # 0、待审核；100、通过；200、拒绝
+            amt = int(amount) * 100
+            commit_refund.result = 0 if amt >0 else 100  # 0、待审核；100、通过；200、拒绝
             commit_refund.discount_type = int(discount_type)  # 减免类型
             commit_refund.pay_amt = int(pay_amt) * 100
-            commit_refund.amount = int(amount) * 100
+            commit_refund.amount = amt
             commit_refund.remain_amt = int(amount) * 100
-        if type == '2':  # 移交外催
-            commit_refund.result = 100  # 0、待审核；100、通过；200、拒绝
-            contract.is_settled = 200  # 合同状态==》移交外催
-        if type == '0':  # 提醒还款
-            commit_refund.result = 100  # 0、待审核；100、通过；200、拒绝
+
 
         db.session.add(commit_refund)  # 保存协商还款信息
-
         contract.is_dealt = 1  # 合同当天任务状态==》已处理
         db.session.add(contract)  # 修改合同状态
         db.session.commit()

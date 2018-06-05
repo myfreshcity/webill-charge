@@ -92,7 +92,7 @@ class MatchEngine:
         if reduce_amt < i:
             app.logger.info('减免额度不足，至少需要[%s]', i)
         else:
-            self.commit_plan.remain_amt = 0  # 减免额度只用一次
+            self.commit_plan.is_valid = 1  # 减免额度只用一次
 
 
     # 按照还款情况单笔冲账
@@ -108,7 +108,7 @@ class MatchEngine:
 
         if self.match_type == 0:  # 结清时算总账
             if v >= get_future_offset(self.contract):
-                self.commit_plan.remain_amt = 0  # 减免额度只用一次
+                self.commit_plan.is_valid = 1  # 减免额度只用一次
                 for plan in tplans:
                     self.__do_close(plan)
 
@@ -261,15 +261,20 @@ class MatchEngine:
     def __get_reduce_plan(self):
         commit_plan = CommitInfo.query.filter(CommitInfo.contract_id == self.contract.id,
                                               CommitInfo.type == 1,
+                                              CommitInfo.is_valid == 0,
                                               CommitInfo.result == 100
                                               ).order_by(CommitInfo.apply_date.desc()).first()
         if commit_plan:
-            deadline_time = commit_plan.apply_date
-            if self.refund:  # 如果存款时间在申请当天，审批额度则有效
-                if self.refund.refund_time.date() == deadline_time.date() or self.is_partion_match:
-                    return commit_plan if commit_plan.remain_amt > 0 else None
-            else:  # 如果是付后减免取申请时间
+            deadline = commit_plan.apply_date.date()
+            if self.refund:
+                # 如果存款时间在申请当天，审批额度则有效
+                if self.refund.refund_time.date() == deadline:
+                    return commit_plan
+                # 人工冲账时需要当天有效
+                if self.is_partion_match and deadline >= datetime.date.today():
+                    return commit_plan
+            elif deadline >= datetime.date.today():  # 如果是付后减免取申请时间
                 return commit_plan
-        else:
-            return None
+
+        return None
 
