@@ -456,12 +456,19 @@ class DataExecute:
         commit_refund.is_valid = 0  # 0、有效；-1；无效
         if type == '1':  # 申请减免
             amt = int(amount) * 100
-            commit_refund.result = 0 if amt >0 else 100  # 0、待审核；100、通过；200、拒绝
+            commit_refund.amount = amt
             commit_refund.discount_type = int(discount_type)  # 减免类型
             commit_refund.pay_amt = int(pay_amt) * 100
-            commit_refund.amount = amt
-            commit_refund.remain_amt = int(amount) * 100
+            commit_refund.remain_amt = commit_refund.amount
 
+            if amt <= 0:
+                commit_refund.result = 100 # 0、待审核；100、通过；200、拒绝
+                if commit_refund.pay_amt == 0:
+                    result = MatchEngine().match_by_contract(contract)
+                    if result:
+                        return {'isSucceed': 500, 'message': result['msg']}
+            else:
+                commit_refund.result = 0
 
         db.session.add(commit_refund)  # 保存协商还款信息
         contract.is_dealt = 1  # 合同当天任务状态==》已处理
